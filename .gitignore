@@ -1,0 +1,32 @@
+```
+# Documentation files that might contain sensitive information
+*.md.bak
+*.txt.bak
+
+# Backup files
+*~
+*.bak
+*.backup
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+```
