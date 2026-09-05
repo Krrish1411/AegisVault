@@ -1,0 +1,647 @@
+/* ==========================================================================
+   AegisVault Design Tokens & Theming System
+   Multi-Palette Modern Theme Engine with True Light & Dark Mode Support
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Base Neutral Fallbacks
+   -------------------------------------------------------------------------- */
+:root {
+  /* Default Light Mode: Shadcn Preset b7Co9KVtse (Luma Cyan & Mist) */
+  --color-ink: #0f172a;
+  --color-moss: #f8fafc;
+  --color-card: #ffffff;
+  --color-line: #e2e8f0;
+  --hero-a: #0284c7;
+  --hero-b: #0369a1;
+  --hero-c: #075985;
+  color-scheme: light;
+
+  /* Semantic System Tokens */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f0f9ff;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  --ring: #0284c7;
+
+  --accent: #0284c7;
+  --accent-foreground: #ffffff;
+  --accent-hover: #0369a1;
+  --accent-subtle: #e0f2fe;
+
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --success-subtle: #f0fdf4;
+
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --warning-subtle: #fffbeb;
+
+  --danger: #e11d48;
+  --danger-foreground: #ffffff;
+  --danger-subtle: #fff1f2;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+}
+
+.dark {
+  /* Default Dark Mode: Shadcn Preset b7Co9KVtse (Luma Cyan & Mist) */
+  --color-ink: #f8fafc;
+  --color-moss: #0a0e17;
+  --color-card: #111827;
+  --color-line: #1e293b;
+  --hero-a: #0369a1;
+  --hero-b: #075985;
+  --hero-c: #0c4a6e;
+  color-scheme: dark;
+
+  --background: #0a0e17;
+  --foreground: #f8fafc;
+
+  --surface: #111827;
+  --surface-elevated: #162032;
+  --surface-subtle: #0d131f;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border: #1e293b;
+  --border-subtle: #162032;
+
+  --ring: #38bdf8;
+
+  --accent: #0ea5e9;
+  --accent-foreground: #ffffff;
+  --accent-hover: #38bdf8;
+  --accent-subtle: #082f49;
+
+  --success: #22c55e;
+  --success-foreground: #022c22;
+  --success-subtle: #052e16;
+
+  --warning: #f59e0b;
+  --warning-foreground: #451a03;
+  --warning-subtle: #351c05;
+
+  --danger: #f43f5e;
+  --danger-foreground: #ffffff;
+  --danger-subtle: #4c0519;
+}
+
+/* --------------------------------------------------------------------------
+   2. Proton Violet (Proton Pass Aesthetic: Electric Violet & Obsidian)
+   -------------------------------------------------------------------------- */
+[data-theme='proton'] {
+  /* Light Mode */
+  --color-ink: #0f172a;
+  --color-moss: #fbfbfe;
+  --color-card: #ffffff;
+  --color-line: #e4e2f5;
+  --hero-a: #5b3ae6;
+  --hero-b: #4628bf;
+  --hero-c: #2d1880;
+  color-scheme: light;
+
+  --background: #fbfbfe;
+  --foreground: #0f172a;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f4f2fb;
+
+  --text-primary: #0f172a;
+  --text-secondary: #4a4568;
+  --text-muted: #756f94;
+
+  --border: #e4e2f5;
+  --border-subtle: #edeaf8;
+
+  --ring: #6d4aff;
+  --accent: #6d4aff;
+  --accent-foreground: #ffffff;
+  --accent-hover: #5b3ae6;
+  --accent-subtle: #f3efff;
+
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #e11d48;
+}
+
+[data-theme='proton'].dark,
+.dark[data-theme='proton'],
+.dark [data-theme='proton'] {
+  /* Dark Mode */
+  --color-ink: #f4f1fd;
+  --color-moss: #0d0e15;
+  --color-card: #151722;
+  --color-line: #272a3e;
+  --hero-a: #3d2482;
+  --hero-b: #241454;
+  --hero-c: #130a2f;
+  color-scheme: dark;
+
+  --background: #0d0e15;
+  --foreground: #f4f1fd;
+
+  --surface: #151722;
+  --surface-elevated: #1e2030;
+  --surface-subtle: #11121c;
+
+  --text-primary: #f4f1fd;
+  --text-secondary: #a9a3ca;
+  --text-muted: #6b648c;
+
+  --border: #272a3e;
+  --border-subtle: #1c1e2d;
+
+  --ring: #6d4aff;
+  --accent: #6d4aff;
+  --accent-foreground: #ffffff;
+  --accent-hover: #8262ff;
+  --accent-subtle: #211942;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+/* --------------------------------------------------------------------------
+   3. Linear Indigo (Linear / Modern Dev Aesthetic: Deep Navy & Indigo)
+   -------------------------------------------------------------------------- */
+[data-theme='indigo'] {
+  /* Light Mode */
+  --color-ink: #0b132b;
+  --color-moss: #f8faff;
+  --color-card: #ffffff;
+  --color-line: #dce4f7;
+  --hero-a: #4338ca;
+  --hero-b: #312e81;
+  --hero-c: #1e1b4b;
+  color-scheme: light;
+
+  --background: #f8faff;
+  --foreground: #0b132b;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #edf2fc;
+
+  --text-primary: #0b132b;
+  --text-secondary: #3b4866;
+  --text-muted: #627294;
+
+  --border: #dce4f7;
+  --border-subtle: #e9effb;
+
+  --ring: #4f46e5;
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+  --accent-hover: #4338ca;
+  --accent-subtle: #eef2ff;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+}
+
+[data-theme='indigo'].dark,
+.dark[data-theme='indigo'],
+.dark [data-theme='indigo'] {
+  /* Dark Mode */
+  --color-ink: #f0f3ff;
+  --color-moss: #0a0d16;
+  --color-card: #121827;
+  --color-line: #222d47;
+  --hero-a: #1e3a8a;
+  --hero-b: #172554;
+  --hero-c: #091024;
+  color-scheme: dark;
+
+  --background: #0a0d16;
+  --foreground: #f0f3ff;
+
+  --surface: #121827;
+  --surface-elevated: #1a233a;
+  --surface-subtle: #0e1320;
+
+  --text-primary: #f0f3ff;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+
+  --border: #222d47;
+  --border-subtle: #171f33;
+
+  --ring: #5865f2;
+  --accent: #5865f2;
+  --accent-foreground: #ffffff;
+  --accent-hover: #7289da;
+  --accent-subtle: #171d3d;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+}
+
+/* --------------------------------------------------------------------------
+   4. Titanium Slate (Monochrome Ice & Cyan Focus)
+   -------------------------------------------------------------------------- */
+[data-theme='slate'] {
+  /* Light Mode */
+  --color-ink: #0f172a;
+  --color-moss: #f8fafc;
+  --color-card: #ffffff;
+  --color-line: #e2e8f0;
+  --hero-a: #0369a1;
+  --hero-b: #075985;
+  --hero-c: #0c4a6e;
+  color-scheme: light;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f1f5f9;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  --ring: #0284c7;
+  --accent: #0284c7;
+  --accent-foreground: #ffffff;
+  --accent-hover: #0369a1;
+  --accent-subtle: #e0f2fe;
+
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+}
+
+[data-theme='slate'].dark,
+.dark[data-theme='slate'],
+.dark [data-theme='slate'] {
+  /* Dark Mode */
+  --color-ink: #f8fafc;
+  --color-moss: #0b0f17;
+  --color-card: #131b26;
+  --color-line: #222e40;
+  --hero-a: #1e293b;
+  --hero-b: #0f172a;
+  --hero-c: #020617;
+  color-scheme: dark;
+
+  --background: #0b0f17;
+  --foreground: #f8fafc;
+
+  --surface: #131b26;
+  --surface-elevated: #1b2636;
+  --surface-subtle: #0e141f;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border: #222e40;
+  --border-subtle: #161e2b;
+
+  --ring: #38bdf8;
+  --accent: #38bdf8;
+  --accent-foreground: #0b0f17;
+  --accent-hover: #7dd3fc;
+  --accent-subtle: #082f49;
+
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+}
+
+/* --------------------------------------------------------------------------
+   5. Sunset Amber (Warm Espresso, Cream, & Rich Gold)
+   -------------------------------------------------------------------------- */
+[data-theme='amber'] {
+  /* Light Mode */
+  --color-ink: #1f1406;
+  --color-moss: #fefcf7;
+  --color-card: #ffffff;
+  --color-line: #ebe2d3;
+  --hero-a: #b45309;
+  --hero-b: #92400e;
+  --hero-c: #78350f;
+  color-scheme: light;
+
+  --background: #fefcf7;
+  --foreground: #1f1406;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f7f2e7;
+
+  --text-primary: #1f1406;
+  --text-secondary: #59422a;
+  --text-muted: #856a4f;
+
+  --border: #ebe2d3;
+  --border-subtle: #f3ede2;
+
+  --ring: #d97706;
+  --accent: #d97706;
+  --accent-foreground: #ffffff;
+  --accent-hover: #b45309;
+  --accent-subtle: #fef3c7;
+
+  --success: #15803d;
+  --warning: #d97706;
+  --danger: #b91c1c;
+}
+
+[data-theme='amber'].dark,
+.dark[data-theme='amber'],
+.dark [data-theme='amber'] {
+  /* Dark Mode */
+  --color-ink: #fffbeb;
+  --color-moss: #14110e;
+  --color-card: #201a15;
+  --color-line: #3b2e23;
+  --hero-a: #78350f;
+  --hero-b: #451a03;
+  --hero-c: #1c0a02;
+  color-scheme: dark;
+
+  --background: #14110e;
+  --foreground: #fffbeb;
+
+  --surface: #201a15;
+  --surface-elevated: #2d241d;
+  --surface-subtle: #17120e;
+
+  --text-primary: #fffbeb;
+  --text-secondary: #d4a373;
+  --text-muted: #8c6d4f;
+
+  --border: #3b2e23;
+  --border-subtle: #291f16;
+
+  --ring: #d97706;
+  --accent: #d97706;
+  --accent-foreground: #ffffff;
+  --accent-hover: #f59e0b;
+  --accent-subtle: #451a03;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+/* --------------------------------------------------------------------------
+   6. Botanical Pine (Original Stripe Climate / Botanical Green Aesthetic)
+   -------------------------------------------------------------------------- */
+[data-theme='pine'] {
+  /* Light Mode */
+  --color-ink: #10201a;
+  --color-moss: #edf4ee;
+  --color-card: #ffffff;
+  --color-line: #c9dccf;
+  --hero-a: #0e5138;
+  --hero-b: #0b3d2e;
+  --hero-c: #07271e;
+  color-scheme: light;
+
+  --background: #edf4ee;
+  --foreground: #10201a;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #e3ede5;
+
+  --text-primary: #10201a;
+  --text-secondary: #2c4238;
+  --text-muted: #5e7a6e;
+
+  --border: #c9dccf;
+  --border-subtle: #dbe8e0;
+
+  --ring: #12855a;
+  --accent: #12855a;
+  --accent-foreground: #ffffff;
+  --accent-hover: #0e5138;
+  --accent-subtle: #d9eee2;
+
+  --success: #228a61;
+  --warning: #e8940a;
+  --danger: #d6455d;
+}
+
+[data-theme='pine'].dark,
+.dark[data-theme='pine'],
+.dark [data-theme='pine'] {
+  /* Dark Mode */
+  --color-ink: #eaf3ed;
+  --color-moss: #0a0f0c;
+  --color-card: #16201a;
+  --color-line: #26382e;
+  --hero-a: #123528;
+  --hero-b: #0d271e;
+  --hero-c: #081b14;
+  color-scheme: dark;
+
+  --background: #0a0f0c;
+  --foreground: #eaf3ed;
+
+  --surface: #16201a;
+  --surface-elevated: #1c2b23;
+  --surface-subtle: #111b15;
+
+  --text-primary: #eaf3ed;
+  --text-secondary: #97b5a5;
+  --text-muted: #5b796a;
+
+  --border: #26382e;
+  --border-subtle: #1b2921;
+
+  --ring: #228a61;
+  --accent: #228a61;
+  --accent-foreground: #ffffff;
+  --accent-hover: #4fa881;
+  --accent-subtle: #082d22;
+
+  --success: #4fa881;
+  --warning: #eda82c;
+  --danger: #e56782;
+}
+
+/* --------------------------------------------------------------------------
+   6. Luma Cyan (Shadcn Preset b7Co9KVtse: Cyber Cyan & Mist)
+   -------------------------------------------------------------------------- */
+[data-theme='cyan'] {
+  /* Light Mode */
+  --color-ink: #0f172a;
+  --color-moss: #f8fafc;
+  --color-card: #ffffff;
+  --color-line: #e2e8f0;
+  --hero-a: #0284c7;
+  --hero-b: #0369a1;
+  --hero-c: #075985;
+  color-scheme: light;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f0f9ff;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  --ring: #0284c7;
+  --accent: #0284c7;
+  --accent-foreground: #ffffff;
+  --accent-hover: #0369a1;
+  --accent-subtle: #e0f2fe;
+
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #e11d48;
+}
+
+[data-theme='cyan'].dark,
+.dark[data-theme='cyan'],
+.dark [data-theme='cyan'] {
+  /* Dark Mode */
+  --color-ink: #f8fafc;
+  --color-moss: #0a0e17;
+  --color-card: #111827;
+  --color-line: #1e293b;
+  --hero-a: #0369a1;
+  --hero-b: #075985;
+  --hero-c: #0c4a6e;
+  color-scheme: dark;
+
+  --background: #0a0e17;
+  --foreground: #f8fafc;
+
+  --surface: #111827;
+  --surface-elevated: #162032;
+  --surface-subtle: #0d131f;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border: #1e293b;
+  --border-subtle: #162032;
+
+  --ring: #38bdf8;
+  --accent: #0ea5e9;
+  --accent-foreground: #ffffff;
+  --accent-hover: #38bdf8;
+}
+
+/* --------------------------------------------------------------------------
+   Range Slider Track & Thumb Normalization
+   -------------------------------------------------------------------------- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+}
+
+input[type="range"]:focus {
+  outline: none;
+}
+
+/* WebKit (Chrome, Safari, Edge) */
+input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 8px;
+  cursor: pointer;
+  background: var(--color-line, #cbd5e1);
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.dark input[type="range"]::-webkit-slider-runnable-track {
+  background: #334155;
+  border-color: #1e293b;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 9999px;
+  background: var(--accent, #0284c7);
+  border: 2.5px solid var(--surface, #ffffff);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  margin-top: -6px; /* (thumb height 20 - track height 8) / -2 */
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+  background: var(--accent-hover, #0369a1);
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 8px;
+  cursor: pointer;
+  background: var(--color-line, #cbd5e1);
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.dark input[type="range"]::-moz-range-track {
+  background: #334155;
+  border-color: #1e293b;
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 9999px;
+  background: var(--accent, #0284c7);
+  border: 2.5px solid var(--surface, #ffffff);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-progress {
+  background: var(--accent, #0284c7);
+  border-radius: 9999px;
+  height: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Native Select Normalization
+   -------------------------------------------------------------------------- */
+select {
+  color-scheme: light dark;
+}
+
