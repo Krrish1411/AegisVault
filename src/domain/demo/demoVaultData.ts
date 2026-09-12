@@ -589,13 +589,15 @@ export function generateDemoVaultItems(): VaultItemEnvelope[] {
   }, { folderId: 'f-work', tags: ['ssh', 'devops', 'server'] });
 
   push('api-1', 'api_key', 'OpenAI GPT-4 Production API Key', {
-    apiKey: 'sk-proj-aegisvault9928104859281048592810485928104859281048592810485928104859281048',
+    // NOTE: Demo placeholder only — not a real secret. Format intentionally broken to avoid scanner false positives.
+    apiKey: 'DEMO_PLACEHOLDER_openai_api_key_replace_with_real_key',
     serviceName: 'OpenAI API Platform',
     endpoint: 'https://api.openai.com/v1',
   }, { folderId: 'f-work', tags: ['api', 'ai', 'openai'] });
 
   push('api-2', 'api_key', 'Stripe Production Webhook Signing Secret', {
-    apiKey: 'whsec_9948201948592810485928104859281048592810485928104859281048592810',
+    // NOTE: Demo placeholder only — not a real secret. Format intentionally broken to avoid scanner false positives.
+    apiKey: 'DEMO_PLACEHOLDER_stripe_webhook_signing_secret_replace_with_real_key',
     serviceName: 'Stripe Webhooks',
     endpoint: 'https://api.aegisvault.io/webhooks/stripe',
   }, { folderId: 'f-finance', tags: ['api', 'stripe', 'payments'] });
