@@ -11,10 +11,14 @@ import {
   WifiOff,
   Radio,
   RotateCcw,
+  Search,
+  Zap,
+  ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/primitives/Card';
 import { Button } from '@/ui/primitives/Button';
 import { Badge } from '@/ui/primitives/Badge';
+import { Input } from '@/ui/primitives/Input';
 import { EmptyState } from '@/ui/primitives/EmptyState';
 import { analyzeVaultHealth, type VaultSecurityReport, type SecurityFinding } from '@/domain/security-center/securityAnalyzer';
 import { appVaultService } from '@/application/services/AppVaultService';
@@ -29,8 +33,10 @@ export function SecurityCenterScreen() {
   const vaultRevision = useUiStore((state) => state.vaultRevision);
   const [report, setReport] = React.useState<VaultSecurityReport | null>(null);
   const [activeFilter, setActiveFilter] = React.useState<
-    'all' | 'common' | 'weak' | 'reused' | 'old' | 'missing_2fa' | 'expired' | 'expiring_soon'
-  >('all');
+    'priority' | 'all' | 'common' | 'weak' | 'reused' | 'old' | 'missing_2fa' | 'expired' | 'expiring_soon'
+  >('priority');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [visibleLimit, setVisibleLimit] = React.useState(30);
 
   // Modal states
   const [editingItem, setEditingItem] = React.useState<VaultItemEnvelope | null>(null);
@@ -59,11 +65,40 @@ export function SecurityCenterScreen() {
     }
   };
 
+  const priorityFindings = React.useMemo(() => {
+    if (!report) return [];
+    return report.findings.filter(
+      (f) => f.vulnerability !== 'missing_2fa' && f.vulnerability !== 'old'
+    );
+  }, [report]);
+
+  const informationalCount = React.useMemo(() => {
+    if (!report) return 0;
+    return (report.missing2faCount ?? 0) + (report.oldCount ?? 0);
+  }, [report]);
+
   const filteredFindings = React.useMemo(() => {
     if (!report) return [];
-    if (activeFilter === 'all') return report.findings;
-    return report.findings.filter((f) => f.vulnerability === activeFilter);
-  }, [report, activeFilter]);
+    let list: readonly SecurityFinding[] = report.findings;
+    if (activeFilter === 'priority') {
+      list = priorityFindings;
+    } else if (activeFilter !== 'all') {
+      list = report.findings.filter((f) => f.vulnerability === activeFilter);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (f) =>
+          f.itemTitle.toLowerCase().includes(q) ||
+          (f.username && f.username.toLowerCase().includes(q)) ||
+          f.description.toLowerCase().includes(q) ||
+          f.title.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [report, activeFilter, priorityFindings, searchQuery]);
 
   if (!report) {
     return (
@@ -246,20 +281,77 @@ export function SecurityCenterScreen() {
 
       {/* Actionable Findings Section */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
-          <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
-            <span>Actionable Health Findings</span>
-            <Badge variant={report.findings.length === 0 ? 'success' : 'default'}>
-              {report.findings.length}
-            </Badge>
-          </h3>
+        {/* Priority Focus Mode Banner */}
+        {activeFilter === 'priority' && informationalCount > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-accent/25 bg-accent/5 text-xs text-text-secondary">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+                <Zap className="h-4 w-4 text-accent" />
+              </div>
+              <div>
+                <span className="font-semibold text-text-primary">Priority Focus Mode Active: </span>
+                Showing <strong className="text-accent">{priorityFindings.length}</strong> high-risk vulnerabilities. <span className="text-text-muted">({informationalCount} informational suggestions like missing 2FA and stale passwords are hidden)</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setActiveFilter('all')}
+                className="h-7 text-xs border-accent/30 text-accent hover:bg-accent/10"
+              >
+                Show All ({report.findings.length})
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-b border-border pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+              <span>Actionable Health Findings</span>
+              <Badge variant={filteredFindings.length === 0 ? 'success' : 'default'}>
+                {filteredFindings.length}
+              </Badge>
+            </h3>
+
+            {/* Search within findings */}
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-text-muted" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setVisibleLimit(30);
+                }}
+                placeholder="Filter findings..."
+                className="pl-8 h-8 text-xs w-full"
+              />
+            </div>
+          </div>
 
           {/* Filter Pills */}
-          <div className="flex flex-wrap items-center gap-1 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <Button
+              size="sm"
+              variant={activeFilter === 'priority' ? 'default' : 'ghost'}
+              onClick={() => {
+                setActiveFilter('priority');
+                setVisibleLimit(30);
+              }}
+              className={`h-7 text-xs gap-1 ${activeFilter === 'priority' ? 'bg-accent text-white' : ''}`}
+            >
+              <Zap className="h-3 w-3" />
+              <span>Priority Risks ({priorityFindings.length})</span>
+            </Button>
+
             <Button
               size="sm"
               variant={activeFilter === 'all' ? 'default' : 'ghost'}
-              onClick={() => setActiveFilter('all')}
+              onClick={() => {
+                setActiveFilter('all');
+                setVisibleLimit(30);
+              }}
               className="h-7 text-xs"
             >
               All ({report.findings.length})
@@ -269,7 +361,10 @@ export function SecurityCenterScreen() {
               <Button
                 size="sm"
                 variant={activeFilter === 'common' ? 'danger' : 'ghost'}
-                onClick={() => setActiveFilter('common')}
+                onClick={() => {
+                  setActiveFilter('common');
+                  setVisibleLimit(30);
+                }}
                 className={`h-7 text-xs ${activeFilter === 'common' ? 'text-white font-semibold' : 'text-danger'}`}
               >
                 Common ({report.commonCount})
@@ -280,7 +375,10 @@ export function SecurityCenterScreen() {
               <Button
                 size="sm"
                 variant={activeFilter === 'weak' ? 'default' : 'ghost'}
-                onClick={() => setActiveFilter('weak')}
+                onClick={() => {
+                  setActiveFilter('weak');
+                  setVisibleLimit(30);
+                }}
                 className="h-7 text-xs"
               >
                 Weak ({report.weakCount})
@@ -291,21 +389,13 @@ export function SecurityCenterScreen() {
               <Button
                 size="sm"
                 variant={activeFilter === 'reused' ? 'default' : 'ghost'}
-                onClick={() => setActiveFilter('reused')}
+                onClick={() => {
+                  setActiveFilter('reused');
+                  setVisibleLimit(30);
+                }}
                 className="h-7 text-xs"
               >
                 Reused ({report.reusedCount})
-              </Button>
-            )}
-
-            {report.oldCount > 0 && (
-              <Button
-                size="sm"
-                variant={activeFilter === 'old' ? 'default' : 'ghost'}
-                onClick={() => setActiveFilter('old')}
-                className="h-7 text-xs"
-              >
-                Old ({report.oldCount})
               </Button>
             )}
 
@@ -313,7 +403,10 @@ export function SecurityCenterScreen() {
               <Button
                 size="sm"
                 variant={activeFilter === 'expired' ? 'danger' : 'ghost'}
-                onClick={() => setActiveFilter('expired')}
+                onClick={() => {
+                  setActiveFilter('expired');
+                  setVisibleLimit(30);
+                }}
                 className={`h-7 text-xs ${activeFilter === 'expired' ? 'text-white font-semibold' : 'text-danger'}`}
               >
                 Expired ({report.expiredCount})
@@ -324,7 +417,10 @@ export function SecurityCenterScreen() {
               <Button
                 size="sm"
                 variant={activeFilter === 'expiring_soon' ? 'secondary' : 'ghost'}
-                onClick={() => setActiveFilter('expiring_soon')}
+                onClick={() => {
+                  setActiveFilter('expiring_soon');
+                  setVisibleLimit(30);
+                }}
                 className={`h-7 text-xs ${activeFilter === 'expiring_soon' ? 'text-amber-700 dark:text-amber-300 font-semibold bg-amber-100 dark:bg-amber-950/60' : 'text-amber-500'}`}
               >
                 Expiring Soon ({report.expiringSoonCount})
@@ -335,10 +431,27 @@ export function SecurityCenterScreen() {
               <Button
                 size="sm"
                 variant={activeFilter === 'missing_2fa' ? 'default' : 'ghost'}
-                onClick={() => setActiveFilter('missing_2fa')}
+                onClick={() => {
+                  setActiveFilter('missing_2fa');
+                  setVisibleLimit(30);
+                }}
                 className="h-7 text-xs"
               >
                 Missing 2FA ({report.missing2faCount})
+              </Button>
+            )}
+
+            {report.oldCount > 0 && (
+              <Button
+                size="sm"
+                variant={activeFilter === 'old' ? 'default' : 'ghost'}
+                onClick={() => {
+                  setActiveFilter('old');
+                  setVisibleLimit(30);
+                }}
+                className="h-7 text-xs"
+              >
+                Old ({report.oldCount})
               </Button>
             )}
           </div>
@@ -346,13 +459,17 @@ export function SecurityCenterScreen() {
 
         {filteredFindings.length === 0 ? (
           <EmptyState
-            title="No Vulnerabilities Detected"
-            description="All accounts in this category meet strict cryptographic entropy and uniqueness standards."
+            title={searchQuery ? 'No Matching Findings' : 'No Vulnerabilities Detected'}
+            description={
+              searchQuery
+                ? `No security findings matched "${searchQuery}".`
+                : 'All accounts in this category meet strict cryptographic entropy and uniqueness standards.'
+            }
             icon={<CheckCircle2 className="h-8 w-8 text-success" />}
           />
         ) : (
           <div className="space-y-3">
-            {filteredFindings.map((finding) => (
+            {filteredFindings.slice(0, visibleLimit).map((finding) => (
               <Card
                 key={finding.id}
                 className="border-border bg-surface transition-all hover:border-border/80 shadow-subtle"
@@ -411,6 +528,33 @@ export function SecurityCenterScreen() {
                 </CardContent>
               </Card>
             ))}
+
+            {filteredFindings.length > visibleLimit && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-border">
+                <span className="text-xs text-text-muted font-mono">
+                  Showing {Math.min(visibleLimit, filteredFindings.length)} of {filteredFindings.length} findings
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setVisibleLimit((prev) => prev + 30)}
+                    className="gap-1.5 text-xs"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                    <span>Load Next 30</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setVisibleLimit(filteredFindings.length)}
+                    className="text-xs text-accent"
+                  >
+                    Show All ({filteredFindings.length})
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

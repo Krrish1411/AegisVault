@@ -84,18 +84,21 @@ export function parseCsvRows(csvText: string): string[][] {
  */
 function getColumnIndex(headers: string[], candidates: string[]): number {
   const cleanHeaders = headers.map((h) => h.toLowerCase().trim().replace(/^["']|["']$/g, ''));
+  const normalizedHeaders = cleanHeaders.map((h) => h.replace(/[-_]/g, ' ').replace(/\s+/g, ' '));
 
-  // 1. Exact match pass
+  // 1. Exact match pass (with separator normalization)
   for (const candidate of candidates) {
     const target = candidate.toLowerCase();
-    const idx = cleanHeaders.findIndex((h) => h === target);
+    const targetNorm = target.replace(/[-_]/g, ' ').replace(/\s+/g, ' ');
+    const idx = cleanHeaders.findIndex((h, i) => h === target || normalizedHeaders[i] === targetNorm);
     if (idx !== -1) return idx;
   }
 
   // 2. Contains match pass (for compound headers like "login username" or "web site")
   for (const candidate of candidates) {
     const target = candidate.toLowerCase();
-    const idx = cleanHeaders.findIndex((h) => h.includes(target));
+    const targetNorm = target.replace(/[-_]/g, ' ').replace(/\s+/g, ' ');
+    const idx = cleanHeaders.findIndex((h, i) => h.includes(target) || normalizedHeaders[i]!.includes(targetNorm));
     if (idx !== -1) return idx;
   }
 
@@ -173,7 +176,7 @@ export function detectExternalFormat(content: string): ExternalFormat {
   // 11. Chrome / Generic Browser CSV
   if (
     (firstLine.includes('url') || firstLine.includes('website')) &&
-    (firstLine.includes('username') || firstLine.includes('user') || firstLine.includes('login')) &&
+    (firstLine.includes('username') || firstLine.includes('user') || firstLine.includes('login') || firstLine.includes('email') || firstLine.includes('mail')) &&
     (firstLine.includes('password') || firstLine.includes('pwd'))
   ) {
     return 'browser_csv';
@@ -279,12 +282,30 @@ export function importExternalPasswordFile(
       'login name',
       'user name',
       'login',
-      'email',
       'user id',
       'userid',
       'client id',
       'account name',
       'user',
+    ]);
+    const emailIdx = getColumnIndex(headers, [
+      'email id',
+      'email_id',
+      'email-id',
+      'emailid',
+      'email address',
+      'email_address',
+      'e-mail id',
+      'e-mail',
+      'e-mail address',
+      'email',
+      'user email',
+      'user_email',
+      'login email',
+      'login_email',
+      'mail',
+      'account email',
+      'account_email',
     ]);
     const passIdx = getColumnIndex(headers, ['login_password', 'password', 'pwd', 'pass', 'code']);
     const urlIdx = getColumnIndex(headers, [
@@ -319,7 +340,24 @@ export function importExternalPasswordFile(
       if (!row || row.length === 0) continue;
 
       const rawTitle = titleIdx !== -1 ? (row[titleIdx] ?? '').trim() : '';
-      const rawUser = userIdx !== -1 ? (row[userIdx] ?? '').trim() : '';
+      const rawUserCandidate = userIdx !== -1 ? (row[userIdx] ?? '').trim() : '';
+      const rawEmailCandidate = emailIdx !== -1 ? (row[emailIdx] ?? '').trim() : '';
+
+      // Fallback: If rawUserCandidate is empty, check rawEmailCandidate
+      let finalUser = rawUserCandidate || rawEmailCandidate;
+
+      // Deep fallback: If still empty, scan row cells for any email-like string
+      if (!finalUser) {
+        for (let c = 0; c < row.length; c++) {
+          if (c === passIdx || c === urlIdx || c === totpIdx) continue;
+          const cellVal = (row[c] ?? '').trim();
+          if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cellVal)) {
+            finalUser = cellVal;
+            break;
+          }
+        }
+      }
+
       // Preserve exact password string (do NOT trim whitespace from passwords)
       const rawPass = passIdx !== -1 ? (row[passIdx] ?? '') : '';
       const rawUrl = urlIdx !== -1 ? (row[urlIdx] ?? '').trim() : '';
@@ -329,7 +367,7 @@ export function importExternalPasswordFile(
       const rawFav = favIdx !== -1 ? (row[favIdx] ?? '').trim() : '';
 
       // Skip completely empty rows
-      if (!rawTitle && !rawUser && !rawPass && !rawUrl) continue;
+      if (!rawTitle && !finalUser && !rawPass && !rawUrl) continue;
 
       // Extract title fallback
       const title = rawTitle || (rawUrl ? rawUrl.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : '') || 'Imported Account';
@@ -364,7 +402,8 @@ export function importExternalPasswordFile(
         createdAt: now,
         updatedAt: now,
         payload: {
-          username: rawUser,
+          username: finalUser,
+          ...(rawEmailCandidate && rawEmailCandidate !== finalUser ? { email: rawEmailCandidate } : {}),
           password: rawPass,
           url: rawUrl,
           urls: rawUrl ? [rawUrl] : [],

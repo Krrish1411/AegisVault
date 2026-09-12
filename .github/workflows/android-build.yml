@@ -11,12 +11,12 @@ on:
       build_type:
         description: 'Build Type'
         required: true
-        default: 'debug-only'
+        default: 'all'
         type: choice
         options:
+          - all
           - debug-only
           - release-only
-          - all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,14 +37,18 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Setup Java 17 (Temurin)
+      - name: Setup Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       # Install ALL dependencies including @capacitor/* devDeps
       - name: Install NPM Dependencies
@@ -60,13 +64,8 @@ jobs:
       - name: Build Production Web Bundle (Android mode)
         run: npm run build:android
 
-      - name: Initialize or Sync Capacitor Android Project
+      - name: Sync Capacitor Android Project
         run: |
-          if [ ! -d "android" ]; then
-            echo "Initializing fresh Capacitor Android platform..."
-            npx cap add android
-          fi
-          echo "Syncing web assets and plugins to Android platform..."
           npx cap sync android
 
       - name: Cache Gradle Caches
@@ -82,17 +81,17 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
+      - name: Build Debug APK (Signed)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'all' || inputs.build_type == 'debug-only' }}
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Build Release APK (unsigned)
-        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release-only' }}
+      - name: Build Release APK (Signed & Obfuscated)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'all' || inputs.build_type == 'release-only' }}
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon --stacktrace || true
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Collect APK Artifacts
         run: |
@@ -101,13 +100,12 @@ jobs:
             cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/AegisVault-Debug.apk
             echo "✅ Debug APK collected"
           fi
-          if [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-artifacts/AegisVault-Release-unsigned.apk
-            echo "✅ Release (unsigned) APK collected"
-          fi
           if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
             cp android/app/build/outputs/apk/release/app-release.apk build-artifacts/AegisVault-Release.apk
             echo "✅ Release APK collected"
+          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-artifacts/AegisVault-Release-unsigned.apk
+            echo "✅ Release (unsigned) APK collected"
           fi
           echo "--- Build artifacts ---"
           ls -lh build-artifacts/

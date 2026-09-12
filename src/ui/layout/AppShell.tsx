@@ -286,7 +286,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Content View Area */}
         <main className="flex-1 overflow-y-auto page-bg focus:outline-none custom-scrollbar">
-          <div className="w-full max-w-7xl mx-auto px-4 sm:px-8 py-6 h-full flex flex-col">
+          <div className="w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-5 h-full flex flex-col">
             {children || <Outlet />}
           </div>
         </main>

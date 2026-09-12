@@ -49,18 +49,45 @@ export interface TotpResult {
 }
 
 /**
- * Generates an RFC 6238 TOTP code from a base32 secret.
+ * Extracts raw Base32 secret from a plain key or otpauth:// URI.
+ */
+export function extractTotpSecret(secretOrUri: string): {
+  secret: string;
+  issuer?: string | undefined;
+  account?: string | undefined;
+  digits?: (6 | 8) | undefined;
+  period?: number | undefined;
+  algorithm?: ('SHA1' | 'SHA256' | 'SHA512') | undefined;
+} {
+  const trimmed = secretOrUri.trim();
+  if (trimmed.startsWith('otpauth://')) {
+    try {
+      return parseOtpauthUri(trimmed);
+    } catch {
+      // fallback to extracting query param secret
+      const match = trimmed.match(/[?&]secret=([A-Za-z2-7=]+)/i);
+      if (match?.[1]) {
+        return { secret: match[1] };
+      }
+    }
+  }
+  return { secret: trimmed.replace(/[\s-]/g, '') };
+}
+
+/**
+ * Generates an RFC 6238 TOTP code from a base32 secret or otpauth:// URI.
  */
 export async function generateTotp(
-  secretBase32: string,
+  secretOrUri: string,
   options: TotpOptions = {}
 ): Promise<TotpResult> {
-  const period = options.period ?? 30;
-  const digits = options.digits ?? 6;
-  const algorithm = options.algorithm ?? 'SHA1';
+  const extracted = extractTotpSecret(secretOrUri);
+  const period = options.period ?? extracted.period ?? 30;
+  const digits = options.digits ?? extracted.digits ?? 6;
+  const algorithm = options.algorithm ?? extracted.algorithm ?? 'SHA1';
   const timestamp = options.timestamp ?? Date.now();
 
-  const keyBytes = decodeBase32(secretBase32);
+  const keyBytes = decodeBase32(extracted.secret);
 
   // Time step count
   const epochSeconds = Math.floor(timestamp / 1000);

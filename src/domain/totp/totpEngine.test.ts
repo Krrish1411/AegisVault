@@ -64,4 +64,10 @@ describe('totpEngine (RFC 6238 / RFC 4226)', () => {
     expect(formatTotpCode('123456')).toBe('123 456');
     expect(formatTotpCode('12345678')).toBe('1234 5678');
   });
+
+  it('should generate TOTP codes directly from otpauth:// URIs', async () => {
+    const uri = 'otpauth://totp/Google:krish%40gmail.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8&period=30';
+    const result = await generateTotp(uri, { timestamp: 59 * 1000 });
+    expect(result.code).toBe('94287082');
+  });
 });

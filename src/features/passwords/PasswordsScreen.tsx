@@ -21,7 +21,6 @@ import {
   History,
   RotateCcw,
   ShieldCheck,
-  Fingerprint,
 } from 'lucide-react';
 import { Button } from '@/ui/primitives/Button';
 import { Input } from '@/ui/primitives/Input';
@@ -61,6 +60,7 @@ export function PasswordsScreen() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [copiedField, setCopiedField] = React.useState<string | null>(null);
   const [showHistory, setShowHistory] = React.useState(false);
+  const [showTotpSecret, setShowTotpSecret] = React.useState(false);
   const [revealedHistoryIds, setRevealedHistoryIds] = React.useState<Record<string, boolean>>({});
 
   // TOTP live state
@@ -303,6 +303,20 @@ export function PasswordsScreen() {
   const passwordEntropy = calculatePasswordEntropy(selectedPayload.password ?? '');
   const history = selectedItem?.passwordHistory ?? [];
   const websiteUrl = selectedPayload.urls?.[0];
+  const rawTotpSecret =
+    (selectedPayload.totpSecret as string) || (selectedPayload.totp as string) || '';
+
+  const domain = appVaultService.getDecryptedVault();
+  const linkedNotes = React.useMemo(() => {
+    if (!domain || !selectedItem) return [];
+    return domain.items.filter((i) => {
+      if (i.type !== 'secure_note') return false;
+      const notePayload = i.payload as Record<string, unknown>;
+      const linked =
+        (i.linkedItemIds as string[]) || (notePayload.linkedItemIds as string[]) || [];
+      return linked.includes(selectedItem.id);
+    });
+  }, [domain, selectedItem]);
 
   const segmentScore =
     passwordEntropy.strength === 'very_strong'
@@ -1006,9 +1020,9 @@ export function PasswordsScreen() {
                 </div>
               )}
 
-              {/* TOTP 2FA Token Card (if available) */}
-              {totpData && (
-                <div className="rounded-xl border border-accent/30 bg-accent/10 p-4 space-y-2.5 shadow-xs">
+              {/* TOTP 2FA Token & Secret Key Card */}
+              {(rawTotpSecret || totpData) && (
+                <div className="rounded-xl border border-accent/30 bg-accent/10 p-4 space-y-3 shadow-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-accent" />
@@ -1016,33 +1030,75 @@ export function PasswordsScreen() {
                         Two-Factor Authenticator (TOTP)
                       </span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/20">
-                      {totpData.secondsRemaining}s
-                    </span>
+                    {totpData && (
+                      <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/20">
+                        {totpData.secondsRemaining}s
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-3xl font-mono font-extrabold tracking-widest text-ink select-all">
-                      {formatTotpCode(totpData.code)}
-                    </span>
+                  {totpData ? (
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-3xl font-mono font-extrabold tracking-widest text-ink select-all">
+                        {formatTotpCode(totpData.code)}
+                      </span>
 
-                    <Button
-                      size="sm"
-                      onClick={() => handleCopy('totp', totpData.code, '2FA Code')}
-                      className="gap-1.5 text-xs font-semibold cursor-pointer active:scale-95"
-                    >
-                      {copiedField === 'totp' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                      <span>{copiedField === 'totp' ? 'Copied' : 'Copy Code'}</span>
-                    </Button>
-                  </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleCopy('totp', totpData.code, '2FA Code')}
+                        className="gap-1.5 text-xs font-semibold cursor-pointer active:scale-95"
+                      >
+                        {copiedField === 'totp' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        <span>{copiedField === 'totp' ? 'Copied' : 'Copy Code'}</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink/60">Computing live verification code...</p>
+                  )}
 
                   {/* Countdown Progress Bar */}
-                  <div className="w-full bg-moss rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-accent h-1.5 transition-all duration-1000 ease-linear"
-                      style={{ width: `${(totpData.secondsRemaining / 30) * 100}%` }}
-                    />
-                  </div>
+                  {totpData && (
+                    <div className="w-full bg-moss rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-accent h-1.5 transition-all duration-1000 ease-linear"
+                        style={{ width: `${(totpData.secondsRemaining / 30) * 100}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* 2FA Secret Key / URI display */}
+                  {rawTotpSecret && (
+                    <div className="pt-2 border-t border-accent/20 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-ink/60">
+                        <span className="font-mono uppercase tracking-wider">2FA Secret Key / URI</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowTotpSecret(!showTotpSecret)}
+                            className="text-ink/60 hover:text-ink cursor-pointer"
+                            title={showTotpSecret ? 'Hide secret' : 'Show secret'}
+                          >
+                            {showTotpSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy('totpSecret', rawTotpSecret, '2FA Secret')}
+                            className="text-accent hover:underline cursor-pointer inline-flex items-center gap-1 font-semibold text-xs"
+                          >
+                            {copiedField === 'totpSecret' ? (
+                              <Check className="h-3 w-3 text-emerald-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                            <span>{copiedField === 'totpSecret' ? 'Copied' : 'Copy Secret'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <p className="font-mono text-xs text-ink bg-card/80 p-2 rounded-lg border border-line/60 break-all select-all">
+                        {showTotpSecret ? rawTotpSecret : '••••••••••••••••••••••••'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1078,66 +1134,153 @@ export function PasswordsScreen() {
                 </div>
               )}
 
-              {/* Cryptographic Security Audit & Metadata Log (Always Visible) */}
-              <div className="rounded-xl border border-line bg-card/50 p-4 space-y-3.5 shadow-xs">
+              {/* Comprehensive Password Change & Rotation History Log */}
+              <div className="rounded-xl border border-line bg-card/60 p-4 space-y-3.5 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-mono font-bold text-ink/75 uppercase tracking-wider">
-                    <ShieldCheck className="h-4 w-4 text-accent" />
-                    <span>Cryptographic Audit & Security Log</span>
+                    <History className="h-4 w-4 text-accent" />
+                    <span>Password Change & History Log</span>
                   </div>
-                  <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    AEAD Authenticated
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-                  <div className="p-2 rounded-lg bg-moss/50 border border-line/50">
-                    <span className="text-ink/45 text-[10px] uppercase block tracking-wider">CIPHER SUITE</span>
-                    <span className="text-ink font-semibold text-xs">XChaCha20-Poly1305</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-moss/50 border border-line/50">
-                    <span className="text-ink/45 text-[10px] uppercase block tracking-wider">KEY DERIVATION</span>
-                    <span className="text-ink font-semibold text-xs">Argon2id (64MB)</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-moss/50 border border-line/50">
-                    <span className="text-ink/45 text-[10px] uppercase block tracking-wider">CREATED ON</span>
-                    <span className="text-ink text-xs truncate block" title={new Date(selectedItem.createdAt).toLocaleString()}>
-                      {new Date(selectedItem.createdAt).toLocaleDateString()}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-moss text-ink/70 border border-line">
+                      {history.length > 0 ? `${history.length} change${history.length === 1 ? '' : 's'}` : 'Original password active'}
                     </span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-moss/50 border border-line/50">
-                    <span className="text-ink/45 text-[10px] uppercase block tracking-wider">LAST MODIFIED</span>
-                    <span className="text-ink text-xs truncate block" title={new Date(selectedItem.updatedAt).toLocaleString()}>
-                      {new Date(selectedItem.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* UUID & Storage Info */}
-                <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-moss/30 border border-line/40 text-[11px] font-mono text-ink/60">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Fingerprint className="h-3.5 w-3.5 text-ink/45 shrink-0" />
-                    <span className="truncate">UUID: {selectedItem.id}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy('uuid', selectedItem.id, 'Item UUID')}
-                    className="text-xs font-semibold text-accent hover:underline shrink-0 inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    {copiedField === 'uuid' ? (
-                      <>
-                        <Check className="h-3 w-3 text-emerald-500" />
-                        <span className="text-emerald-500">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        <span>Copy UUID</span>
-                      </>
+                    {history.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearHistory}
+                        className="text-[11px] text-danger hover:underline cursor-pointer"
+                      >
+                        Clear History
+                      </button>
                     )}
-                  </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {/* Active / Current Password Status */}
+                  <div className="p-3 rounded-lg border border-accent/25 bg-accent/5 space-y-1 text-xs">
+                    <div className="flex items-center justify-between font-semibold text-accent text-xs">
+                      <span>Active Password (Current)</span>
+                      <span className="font-mono text-[11px]">
+                        Active since {new Date(selectedPayload.lastPasswordRotatedAt || selectedItem.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ink/60">
+                      {history.length > 0
+                        ? 'Active credential currently used for this login (displayed above).'
+                        : 'Initial password created for this credential. No password rotations recorded yet.'}
+                    </p>
+                  </div>
+
+                  {/* Historical Password Rotations Timeline */}
+                  {history.map((h, idx) => {
+                    const isRevealed = Boolean(revealedHistoryIds[h.id]);
+                    const isOriginal = idx === history.length - 1;
+                    return (
+                      <div
+                        key={h.id}
+                        className="rounded-lg border border-line bg-moss/40 p-3 space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-ink">
+                            {isOriginal ? 'Original Password' : `Previous Password #${history.length - idx}`}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleRestorePassword(h.id)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline cursor-pointer"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Restore</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteHistoryEntry(h.id)}
+                              className="text-[11px] text-danger hover:underline cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-ink/60 font-mono">
+                          <span>
+                            {isOriginal
+                              ? `Created on: ${new Date(selectedItem.createdAt).toLocaleString()}`
+                              : `Changed on: ${new Date(h.archivedAt).toLocaleString()}`}
+                          </span>
+                          <span className="sm:text-right">
+                            Replaced by: {idx === 0 ? 'Active Password (above)' : `Password #${history.length - idx + 1}`}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between font-mono text-xs bg-card px-2.5 py-1.5 rounded-lg border border-line">
+                          <span className="truncate tracking-wider select-all font-mono">
+                            {isRevealed ? h.password : '••••••••••••••••'}
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRevealedHistoryIds((prev) => ({ ...prev, [h.id]: !prev[h.id] }))
+                              }
+                              className="text-ink/50 hover:text-ink cursor-pointer"
+                              title={isRevealed ? 'Hide password' : 'Show password'}
+                            >
+                              {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(`hist-${h.id}`, h.password, 'Historical Password')}
+                              className="text-accent hover:underline cursor-pointer inline-flex items-center gap-1 text-xs font-semibold"
+                              title="Copy historical password"
+                            >
+                              {copiedField === `hist-${h.id}` ? (
+                                <Check className="h-3 w-3 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                              <span>Copy</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* Linked Secure Notes Section */}
+              {linkedNotes.length > 0 && (
+                <div className="rounded-xl border border-line bg-card/60 p-3.5 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-ink/50 flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-accent" />
+                      <span>Linked Secure Notes ({linkedNotes.length})</span>
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {linkedNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        className="p-2.5 rounded-lg border border-line/60 bg-moss/30 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-semibold text-ink truncate block">{note.title}</span>
+                          <span className="text-[10px] text-ink/50 font-mono">
+                            Updated {new Date(note.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] shrink-0 font-mono">
+                          Note
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-3">

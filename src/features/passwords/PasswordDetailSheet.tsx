@@ -15,6 +15,9 @@ import {
   Archive,
   RotateCcw,
   Clock,
+  ShieldCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Sheet } from '@/ui/primitives/Sheet';
 import { Button } from '@/ui/primitives/Button';
@@ -23,6 +26,7 @@ import { SecretInput } from '@/ui/primitives/SecretInput';
 import { Dialog } from '@/ui/primitives/Dialog';
 import type { VaultItemEnvelope, LoginPayload } from '@/domain/vault/types';
 import { appVaultService } from '@/application/services/AppVaultService';
+import { generateTotp, formatTotpCode } from '@/domain/totp/totpEngine';
 import { webClipboard } from '@/platform/web/WebClipboardPort';
 import { useSessionStore } from '@/state/sessionStore';
 import { useUiStore } from '@/state/uiStore';
@@ -48,13 +52,69 @@ export function PasswordDetailSheet({
   const clipboardClearSeconds = useSessionStore((state) => state.clipboardClearSeconds);
 
   const [copiedUser, setCopiedUser] = React.useState(false);
+  const [copiedTotp, setCopiedTotp] = React.useState(false);
+  const [copiedSecret, setCopiedSecret] = React.useState(false);
+  const [showTotpSecret, setShowTotpSecret] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
-  const [showHistory, setShowHistory] = React.useState(false);
+  const [revealedHistoryIds, setRevealedHistoryIds] = React.useState<Record<string, boolean>>({});
+  const [copiedHistoryId, setCopiedHistoryId] = React.useState<string | null>(null);
+
+  // Live TOTP data
+  const [totpData, setTotpData] = React.useState<{
+    code: string;
+    secondsRemaining: number;
+    progress: number;
+  } | null>(null);
+
+  const payload = (item?.payload ?? {}) as Partial<LoginPayload>;
+  const history = item?.passwordHistory ?? [];
+  const rawTotpSecret =
+    (payload.totpSecret as string) || ((payload as Record<string, unknown>).totp as string) || '';
+
+  // Timer for live TOTP 6-digit generation
+  React.useEffect(() => {
+    if (!rawTotpSecret.trim()) {
+      setTotpData(null);
+      return;
+    }
+    let active = true;
+    const update = async () => {
+      try {
+        const res = await generateTotp(rawTotpSecret);
+        if (active) {
+          setTotpData({
+            code: res.code,
+            secondsRemaining: res.secondsRemaining,
+            progress: res.progress,
+          });
+        }
+      } catch {
+        if (active) setTotpData(null);
+      }
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [rawTotpSecret]);
+
+  // Find linked secure notes
+  const domain = appVaultService.getDecryptedVault();
+  const linkedNotes = React.useMemo(() => {
+    if (!domain || !item) return [];
+    return domain.items.filter((i) => {
+      if (i.type !== 'secure_note') return false;
+      const notePayload = i.payload as Record<string, unknown>;
+      const linked =
+        (i.linkedItemIds as string[]) || (notePayload.linkedItemIds as string[]) || [];
+      return linked.includes(item.id);
+    });
+  }, [domain, item]);
 
   if (!item) return null;
-  const payload = item.payload as Partial<LoginPayload>;
-  const history = item.passwordHistory ?? [];
 
   const handleCopyUsername = async () => {
     if (!payload.username) return;
@@ -69,6 +129,33 @@ export function PasswordDetailSheet({
           : 'Copied to clipboard.',
     });
     setTimeout(() => setCopiedUser(false), 2000);
+  };
+
+  const handleCopyTotpCode = async () => {
+    if (!totpData?.code) return;
+    const clearMs = clipboardClearSeconds > 0 ? clipboardClearSeconds * 1000 : 0;
+    await webClipboard.writeText(totpData.code, { autoClearMs: clearMs });
+    setCopiedTotp(true);
+    addToast({
+      title: '2FA Code Copied',
+      description:
+        clipboardClearSeconds > 0
+          ? `6-digit verification code copied (auto-clears in ${clipboardClearSeconds}s).`
+          : '6-digit verification code copied.',
+    });
+    setTimeout(() => setCopiedTotp(false), 2000);
+  };
+
+  const handleCopyTotpSecret = async () => {
+    if (!rawTotpSecret) return;
+    const clearMs = clipboardClearSeconds > 0 ? clipboardClearSeconds * 1000 : 0;
+    await webClipboard.writeText(rawTotpSecret, { autoClearMs: clearMs });
+    setCopiedSecret(true);
+    addToast({
+      title: '2FA Secret Key Copied',
+      description: 'Copied authenticator secret to clipboard.',
+    });
+    setTimeout(() => setCopiedSecret(false), 2000);
   };
 
   const handleDelete = async () => {
@@ -376,60 +463,219 @@ export function PasswordDetailSheet({
               </div>
             )}
 
-            {/* Password History Section */}
-            {history.length > 0 && (
-              <div className="pt-2 border-t border-border">
-                <div className="flex items-center justify-between py-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowHistory(!showHistory)}
-                    className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
-                  >
-                    <History className="h-3.5 w-3.5 text-accent" />
-                    <span>Password History ({history.length})</span>
-                    <span className="text-[11px] text-accent">({showHistory ? 'Hide' : 'Show'})</span>
-                  </button>
-
-                  {showHistory && (
-                    <button
-                      type="button"
-                      onClick={handleClearHistory}
-                      className="text-[11px] text-danger hover:underline"
-                    >
-                      Clear History
-                    </button>
+            {/* Two-Factor Authentication (TOTP / 2FA) */}
+            {rawTotpSecret && (
+              <div className="rounded-xl border border-accent/30 bg-accent/10 p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Two-Factor Authenticator (2FA)</span>
+                  </span>
+                  {totpData && (
+                    <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/25">
+                      {totpData.secondsRemaining}s
+                    </span>
                   )}
                 </div>
 
-                {showHistory && (
-                  <div className="mt-2 space-y-2">
-                    {history.map((h) => (
-                      <div key={h.id} className="rounded border border-border bg-surface-subtle p-2 text-xs space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] text-text-muted">
-                          <span>Replaced on {new Date(h.archivedAt).toLocaleDateString()}</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleRestorePassword(h.id)}
-                              className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
-                            >
-                              <RotateCcw className="h-3 w-3" />
-                              <span>Restore</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteHistoryEntry(h.id)}
-                              className="text-[11px] text-danger hover:underline"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                        <SecretInput value={h.password} readOnly allowCopy={true} className="h-8 text-xs font-mono" />
-                      </div>
-                    ))}
+                {totpData ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl sm:text-3xl font-mono font-extrabold tracking-widest text-ink select-all">
+                      {formatTotpCode(totpData.code)}
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={handleCopyTotpCode}
+                      className="gap-1.5 text-xs font-semibold cursor-pointer active:scale-95"
+                    >
+                      {copiedTotp ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedTotp ? 'Copied' : 'Copy Code'}</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-text-muted">Calculating verification code...</div>
+                )}
+
+                {totpData && (
+                  <div className="w-full bg-moss rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-accent h-1.5 transition-all duration-1000 ease-linear"
+                      style={{ width: `${(totpData.secondsRemaining / 30) * 100}%` }}
+                    />
                   </div>
                 )}
+
+                {/* 2FA Secret Key / URI field */}
+                <div className="pt-2 border-t border-accent/20 space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-text-muted">
+                    <span className="font-mono uppercase tracking-wider">2FA Secret / Key</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTotpSecret(!showTotpSecret)}
+                        className="text-text-muted hover:text-text-primary"
+                        title={showTotpSecret ? 'Hide secret' : 'Show secret'}
+                      >
+                        {showTotpSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopyTotpSecret}
+                        className="text-accent hover:underline inline-flex items-center gap-1"
+                      >
+                        {copiedSecret ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        <span>{copiedSecret ? 'Copied' : 'Copy Secret'}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <p className="font-mono text-xs text-text-primary bg-surface-subtle p-2 rounded border border-border break-all">
+                    {showTotpSecret ? rawTotpSecret : '••••••••••••••••••••••••'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Password Change & Rotation History Log */}
+            <div className="pt-3 border-t border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
+                  <History className="h-4 w-4 text-accent" />
+                  <span>Password Change & History Log</span>
+                  <span className="text-[11px] text-text-muted">
+                    ({history.length > 0 ? `${history.length} change${history.length === 1 ? '' : 's'}` : 'Original'})
+                  </span>
+                </div>
+                {history.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearHistory}
+                    className="text-[11px] text-danger hover:underline cursor-pointer"
+                  >
+                    Clear History
+                  </button>
+                )}
+              </div>
+
+              {/* Timeline Items */}
+              <div className="space-y-2.5">
+                {/* Active Password Status */}
+                <div className="p-2.5 rounded-lg border border-accent/20 bg-accent/5 space-y-1 text-xs">
+                  <div className="flex items-center justify-between text-[11px] text-accent font-semibold">
+                    <span>Active Password (Current)</span>
+                    <span>In use since {new Date(lastRotated).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-[11px] text-text-muted">
+                    {history.length > 0
+                      ? 'Replaced the previous historical password below.'
+                      : 'Original password set when credential was created.'}
+                  </p>
+                </div>
+
+                {/* History Revisions Timeline */}
+                {history.map((h, idx) => {
+                  const isRevealed = Boolean(revealedHistoryIds[h.id]);
+                  const isOriginal = idx === history.length - 1;
+                  return (
+                    <div key={h.id} className="rounded-lg border border-border bg-surface-subtle p-2.5 text-xs space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-text-muted">
+                        <span className="font-medium text-text-primary">
+                          {isOriginal ? 'Original Password' : `Previous Password #${history.length - idx}`}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleRestorePassword(h.id)}
+                            className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline font-medium cursor-pointer"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            <span>Restore</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteHistoryEntry(h.id)}
+                            className="text-[11px] text-danger hover:underline cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-text-muted flex items-center justify-between">
+                        <span>
+                          {isOriginal
+                            ? `Created: ${new Date(item.createdAt).toLocaleDateString()}`
+                            : `Changed on: ${new Date(h.archivedAt).toLocaleDateString()}`}
+                        </span>
+                        <span>
+                          Replaced by: {idx === 0 ? 'Active Password (above)' : `Password #${history.length - idx + 1}`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between font-mono text-xs bg-surface px-2.5 py-1.5 rounded border border-border">
+                        <span className="truncate tracking-wider font-mono">
+                          {isRevealed ? h.password : '••••••••••••••••'}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRevealedHistoryIds((prev) => ({ ...prev, [h.id]: !prev[h.id] }))
+                            }
+                            className="text-text-muted hover:text-text-primary cursor-pointer"
+                            title={isRevealed ? 'Hide password' : 'Show password'}
+                          >
+                            {isRevealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const clearMs = clipboardClearSeconds > 0 ? clipboardClearSeconds * 1000 : 0;
+                              await webClipboard.writeText(h.password, { autoClearMs: clearMs });
+                              setCopiedHistoryId(h.id);
+                              setTimeout(() => setCopiedHistoryId(null), 2000);
+                            }}
+                            className="text-accent hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            title="Copy past password"
+                          >
+                            {copiedHistoryId === h.id ? (
+                              <Check className="h-3 w-3 text-success" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Linked Secure Notes */}
+            {linkedNotes.length > 0 && (
+              <div className="pt-3 border-t border-border space-y-2">
+                <span className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-accent" />
+                  <span>Linked Secure Notes ({linkedNotes.length})</span>
+                </span>
+                <div className="space-y-1.5">
+                  {linkedNotes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="p-2.5 rounded-lg border border-border bg-surface-subtle flex items-center justify-between text-xs"
+                    >
+                      <div className="truncate">
+                        <span className="font-medium text-text-primary block truncate">{note.title}</span>
+                        <span className="text-[10px] text-text-muted font-mono">
+                          Updated {new Date(note.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <Badge variant="default" className="text-[10px]">
+                        Secure Note
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

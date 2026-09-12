@@ -144,4 +144,28 @@ Line 3 final"`;
     const item = result.items[0]!;
     expect((item.payload as Record<string, unknown>).password).toBe('  password with spaces  ');
   });
+
+  it('should correctly import Email ID as username when CSV uses email_id or email column', () => {
+    const EMAIL_ID_CSV = `Title,URL,Email ID,Password
+GitHub Enterprise,https://github.company.com,dev-lead@company.com,SecretPass2026!
+AWS Production,https://console.aws.amazon.com,cloud-ops@infrastructure.io,CloudAdmin999!`;
+
+    const result = importExternalPasswordFile(EMAIL_ID_CSV);
+    expect(result.items.length).toBe(2);
+    expect((result.items[0]?.payload as Record<string, unknown>).username).toBe('dev-lead@company.com');
+    expect((result.items[1]?.payload as Record<string, unknown>).username).toBe('cloud-ops@infrastructure.io');
+  });
+
+  it('should fall back to Email column if Username column is empty', () => {
+    const MIXED_CSV = `name,url,username,email_id,password
+Slack,https://slack.com,,slack-user@workplace.com,SlackPass123!
+Notion,https://notion.so,notion_admin,admin@notion.so,NotionPass456!`;
+
+    const result = importExternalPasswordFile(MIXED_CSV);
+    expect(result.items.length).toBe(2);
+    // First row: username is empty, fallback to email_id
+    expect((result.items[0]?.payload as Record<string, unknown>).username).toBe('slack-user@workplace.com');
+    // Second row: username exists, used as primary
+    expect((result.items[1]?.payload as Record<string, unknown>).username).toBe('notion_admin');
+  });
 });
