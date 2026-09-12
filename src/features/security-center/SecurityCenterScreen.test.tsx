@@ -28,8 +28,10 @@ describe('SecurityCenterScreen UI', () => {
       id: 'login-1',
       type: 'login',
       title: 'Google Personal',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      favorite: false,
+      archived: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       payload: {
         username: 'user@example.com',
         password: 'password123',
@@ -40,8 +42,10 @@ describe('SecurityCenterScreen UI', () => {
       id: 'login-2',
       type: 'login',
       title: 'GitHub Work',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      favorite: false,
+      archived: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       payload: {
         username: 'work@company.com',
         password: 'password123', // Reused & Weak
