@@ -30,7 +30,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
-  const addToast = useUiStore((s) => s.addToast);
 
   const decryptedVault = appVaultService.getDecryptedVault();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -88,7 +87,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
     if (!q) return cmds;
     return cmds.filter((c) => c.title.toLowerCase().includes(q));
-  }, [query, navigate, theme, setTheme, addToast]);
+  }, [query, navigate, theme, setTheme]);
 
   const totalEntries = filteredItems.length + staticCommands.length;
 

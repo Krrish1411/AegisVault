@@ -65,7 +65,7 @@ export function EmergencyAccessModal({ open, onOpenChange }: EmergencyAccessModa
   const refreshContacts = React.useCallback(() => {
     const list = appVaultService.getEmergencyContacts();
     setContacts(list);
-  }, [vaultRevision]);
+  }, []);
 
   React.useEffect(() => {
     if (open) {
@@ -73,7 +73,7 @@ export function EmergencyAccessModal({ open, onOpenChange }: EmergencyAccessModa
       setShowAddForm(false);
       setError(null);
     }
-  }, [open, refreshContacts]);
+  }, [open, refreshContacts, vaultRevision]);
 
   const handleCreateContact = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -66,6 +66,8 @@ export const VaultItemEnvelopeSchema = z.object({
   customFields: z.array(CustomFieldSchema).optional(),
   passwordHistory: z.array(PasswordHistoryEntrySchema).optional(),
   attachmentIds: z.array(z.string()).optional(),
+  linkedItemIds: z.array(z.string()).optional(),
+  expiresAt: z.string().optional(),
 });
 
 export const DecryptedVaultDomainSchema = z.object({
@@ -120,6 +122,9 @@ export const DecryptedVaultDomainSchema = z.object({
         mediaType: z.string(),
         sizeBytes: z.number(),
         createdAt: z.string(),
+        favorite: z.boolean().optional(),
+        linkedItemId: z.string().optional(),
+        linkedItemTitle: z.string().optional(),
       })
     )
     .optional()

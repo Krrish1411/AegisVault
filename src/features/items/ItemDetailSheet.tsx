@@ -60,7 +60,6 @@ export function ItemDetailSheet({
   onItemUpdated,
 }: ItemDetailSheetProps) {
   const addToast = useUiStore((state) => state.addToast);
-  const vaultRevision = useUiStore((state) => state.vaultRevision);
   const clipboardClearSeconds = useSessionStore((state) => state.clipboardClearSeconds);
 
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
@@ -91,7 +90,7 @@ export function ItemDetailSheet({
     return domain.attachments.filter(
       (att) => att.linkedItemId === item.id || item.attachmentIds?.includes(att.id)
     );
-  }, [domain, item, vaultRevision]);
+  }, [domain, item]);
 
   const linkedDocumentItems = React.useMemo(() => {
     if (!domain || !item) return [];
@@ -103,7 +102,7 @@ export function ItemDetailSheet({
         (item.linkedItemIds && item.linkedItemIds.includes(i.id))
       );
     });
-  }, [domain, item, vaultRevision]);
+  }, [domain, item]);
 
   if (!item) return null;
 

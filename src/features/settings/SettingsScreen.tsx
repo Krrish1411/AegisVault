@@ -43,6 +43,7 @@ import { EmergencyAccessModal } from '@/features/emergency/EmergencyAccessModal'
 import { EmergencyUnlockModal } from '@/features/emergency/EmergencyUnlockModal';
 import { ImportExternalModal } from '@/features/migration/ImportExternalModal';
 import { VaultUpgradeModal } from '@/features/migration/VaultUpgradeModal';
+import { BuyMeACoffeeButton } from '@/ui/primitives/BuyMeACoffeeButton';
 import {
   getShortcuts,
   saveShortcut,
@@ -845,6 +846,44 @@ export function SettingsScreen() {
                   >
                     Delete Entire Vault
                   </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* About AegisVault & Creator */}
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-accent" />
+                  <CardTitle className="text-base font-semibold">About AegisVault</CardTitle>
+                </div>
+                <Badge variant="accent">v1.0.0 Stable</Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Zero-knowledge, local-first privacy vault with military-grade authenticated cryptography.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-line bg-surface-subtle">
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold text-text-primary">
+                    AegisVault Digital Locker
+                  </div>
+                  <p className="text-xs text-text-secondary">
+                    Designed and built from the ground up for total data sovereignty. No cloud dependencies, no trackers, zero network transmission.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-accent/30 bg-accent/10 shadow-xs">
+                    <Sparkles className="h-3.5 w-3.5 text-accent" />
+                    <span className="text-xs text-text-secondary font-medium">Crafted by</span>
+                    <span className="text-xs font-black tracking-wide text-accent">
+                      Krish Patel
+                    </span>
+                  </div>
+                  <BuyMeACoffeeButton size="sm" />
                 </div>
               </div>
             </CardContent>

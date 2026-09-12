@@ -89,6 +89,7 @@ export function AddEditItemModal({
   }, [editingItem, defaultType, open]);
 
   const existingItems = React.useMemo(() => {
+    if (!open) return [];
     const domain = appVaultService.getDecryptedVault();
     if (!domain) return [];
     return domain.items.filter((i) => !editingItem || i.id !== editingItem.id);

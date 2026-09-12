@@ -10,6 +10,7 @@ import { logger } from '../logger';
 export interface NetworkGuardOptions {
   allowLocalhost?: boolean;
   strictBlock?: boolean;
+  allowedDomains?: string[];
   onViolation?: (url: string) => void;
 }
 
@@ -73,16 +74,46 @@ class NetworkGuard {
     if (url.startsWith('blob:') || url.startsWith('data:')) {
       return true;
     }
-    if (this.options.allowLocalhost) {
-      if (
-        url.startsWith('/') ||
-        url.includes('localhost') ||
-        url.includes('127.0.0.1') ||
-        url.startsWith(window?.location?.origin ?? '')
-      ) {
+
+    try {
+      const base =
+        typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+          ? window.location.origin
+          : 'http://localhost';
+      const parsed = new URL(url, base);
+
+      // Same-origin verification
+      if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+        if (parsed.origin === window.location.origin) {
+          return true;
+        }
+      } else if (url.startsWith('/') && !url.startsWith('//')) {
         return true;
       }
+
+      // Explicit domain whitelist check
+      if (this.options.allowedDomains?.length) {
+        const host = parsed.hostname.toLowerCase();
+        if (
+          this.options.allowedDomains.some(
+            (d) => host === d.toLowerCase() || host.endsWith('.' + d.toLowerCase())
+          )
+        ) {
+          return true;
+        }
+      }
+
+      // Localhost checks (strict hostname matching, immune to substring trickery)
+      if (this.options.allowLocalhost) {
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') {
+          return true;
+        }
+      }
+    } catch {
+      return false;
     }
+
     return false;
   }
 

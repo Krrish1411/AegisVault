@@ -73,7 +73,7 @@ export function IdentityScreen() {
 
       setItems(results);
     }
-  }, [searchQuery, categoryFilter, filterFavoritesOnly, identityTypes, vaultRevision]);
+  }, [searchQuery, categoryFilter, filterFavoritesOnly, identityTypes]);
 
   React.useEffect(() => {
     refreshIdentity();

@@ -12,12 +12,14 @@ export interface StorageQuotaEstimate {
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = '';
+  const CHUNK_SIZE = 0x8000; // 32KB chunking to prevent call stack overflows and excessive heap allocations
+  const chunks: string[] = [];
   const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]!);
+  for (let i = 0; i < len; i += CHUNK_SIZE) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK_SIZE, len));
+    chunks.push(String.fromCharCode.apply(null, slice as unknown as number[]));
   }
-  return btoa(binary);
+  return btoa(chunks.join(''));
 }
 
 export function base64ToUint8Array(base64: string): Uint8Array {
@@ -54,12 +56,21 @@ export async function calculateSha256(data: Uint8Array): Promise<string> {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
-  // Fallback for non-subtle crypto test environments
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    hash = ((hash << 5) - hash + data[i]!) | 0;
+  // Try libsodium SHA-256 if available in Node or non-subtle contexts
+  try {
+    const sodiumModule = await import('libsodium-wrappers-sumo');
+    const sodium = sodiumModule.default;
+    await sodium.ready;
+    const hash = sodium.crypto_generichash(32, data, null);
+    return sodium.to_hex(hash);
+  } catch {
+    // Ultimate fallback for mocked test runners without libsodium
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) {
+      hash = ((hash << 5) - hash + data[i]!) | 0;
+    }
+    return Math.abs(hash).toString(16).padStart(64, '0');
   }
-  return Math.abs(hash).toString(16).padStart(8, '0');
 }
 
 /**

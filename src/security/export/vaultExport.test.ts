@@ -52,6 +52,30 @@ describe('vaultExport Engine', () => {
     expect(importedDomain.items[0]?.title).toBe('ProtonMail Secure');
   });
 
+  it('should export and restore bundled encrypted attachment records', async () => {
+    const backupPassword = 'BackupPassword123!';
+    const mockAttachment = {
+      id: 'att-export-1',
+      sizeBytes: 1024,
+      nonce: 'bm9uY2UxMjM0',
+      ciphertext: 'Y2lwaGVydGV4dDEyMzQ=',
+      checksumSha256: 'abc123sha256',
+      updatedAt: Date.now(),
+    };
+
+    const exportedJson = await exportEncryptedVault(
+      mockDomain,
+      backupPassword,
+      undefined,
+      [mockAttachment]
+    );
+
+    const imported = await importEncryptedVault(exportedJson, backupPassword);
+    expect(imported.bundledAttachments).toBeDefined();
+    expect(imported.bundledAttachments?.length).toBe(1);
+    expect(imported.bundledAttachments?.[0]?.id).toBe('att-export-1');
+  });
+
   it('should reject import with incorrect password', async () => {
     const backupPassword = 'BackupPassword123!';
     const exportedJson = await exportEncryptedVault(mockDomain, backupPassword);

@@ -107,6 +107,22 @@ describe('Secret Generator Engine', () => {
       }
     });
 
+    it('should never truncate required minimums even if length is smaller than sum of minimums', () => {
+      const res = generatePassword({
+        length: 12,
+        minUppercase: 4,
+        minLowercase: 4,
+        minNumbers: 4,
+        minSymbols: 4, // sum = 16
+      });
+
+      expect(res.secret.length).toBeGreaterThanOrEqual(16);
+      expect((res.secret.match(/[A-Z]/g) || []).length).toBeGreaterThanOrEqual(4);
+      expect((res.secret.match(/[a-z]/g) || []).length).toBeGreaterThanOrEqual(4);
+      expect((res.secret.match(/[0-9]/g) || []).length).toBeGreaterThanOrEqual(4);
+      expect((res.secret.match(/[^a-zA-Z0-9]/g) || []).length).toBeGreaterThanOrEqual(4);
+    });
+
     it('should throw if all character sets are disabled', () => {
       expect(() =>
         generatePassword({

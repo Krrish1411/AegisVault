@@ -158,16 +158,20 @@ export function generatePassword(options: PasswordGeneratorOptions = {}): Genera
     resultChars.push(symbolPool[getSecureRandomInt(symbolPool.length)]!);
   }
 
+  // Guarantee that target length accommodates the sum of all requested minimums
+  const totalMins = minUpper + minLower + minNum + minSym;
+  const targetLength = Math.max(length, totalMins);
+
   // Fill remaining length from combined pool
-  while (resultChars.length < length) {
+  while (resultChars.length < targetLength) {
     resultChars.push(combinedPool[getSecureRandomInt(combinedPool.length)]!);
   }
 
-  // Truncate if minimums exceeded length, then secure shuffle
-  const finalChars = secureShuffle(resultChars.slice(0, length));
+  // Secure shuffle preserving all required characters
+  const finalChars = secureShuffle(resultChars);
   const secret = finalChars.join('');
 
-  const entropyBits = Math.round(length * Math.log2(combinedPool.length));
+  const entropyBits = Math.round(targetLength * Math.log2(combinedPool.length));
 
   return {
     secret,

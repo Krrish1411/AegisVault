@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SodiumCryptoProvider, cryptoProvider } from '@/security/crypto/SodiumCryptoProvider';
 import type { DecryptedVaultDomain } from '@/domain/vault/types';
+import type { EncryptedAttachmentRecord } from '@/storage/ports/VaultRepository';
 import {
   serializeDecryptedVault,
   validateDecryptedVault,
@@ -29,9 +30,25 @@ export const ExportContainerSchema = z.object({
   cipher: z.literal('xchacha20poly1305'),
   nonce: z.string().min(1),
   ciphertext: z.string().min(1),
+  attachments: z
+    .array(
+      z.object({
+        id: z.string(),
+        nonce: z.string(),
+        ciphertext: z.string(),
+        sizeBytes: z.number(),
+        checksumSha256: z.string(),
+        updatedAt: z.number(),
+      })
+    )
+    .optional(),
 });
 
 export type ExportVaultContainer = z.infer<typeof ExportContainerSchema>;
+
+export type ImportedVaultResult = DecryptedVaultDomain & {
+  bundledAttachments?: EncryptedAttachmentRecord[] | undefined;
+};
 
 /**
  * Encrypts full vault domain into an exportable standalone `.aegisvault` container.
@@ -39,7 +56,8 @@ export type ExportVaultContainer = z.infer<typeof ExportContainerSchema>;
 export async function exportEncryptedVault(
   domain: DecryptedVaultDomain,
   password: string,
-  crypto: SodiumCryptoProvider = cryptoProvider
+  crypto: SodiumCryptoProvider = cryptoProvider,
+  attachmentRecords?: EncryptedAttachmentRecord[]
 ): Promise<string> {
   if (!password) {
     throw new ImportValidationFailedError('Password is required to encrypt backup');
@@ -83,6 +101,7 @@ export async function exportEncryptedVault(
     cipher: 'xchacha20poly1305',
     nonce: crypto.toBase64(encrypted.nonce),
     ciphertext: crypto.toBase64(encrypted.ciphertext),
+    ...(attachmentRecords?.length ? { attachments: attachmentRecords } : {}),
   };
 
   return JSON.stringify(container, null, 2);
@@ -96,7 +115,7 @@ export async function importEncryptedVault(
   backupJson: string,
   password: string,
   crypto: SodiumCryptoProvider = cryptoProvider
-): Promise<DecryptedVaultDomain> {
+): Promise<ImportedVaultResult> {
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(backupJson);
@@ -150,5 +169,9 @@ export async function importEncryptedVault(
   }
 
   const validatedDomain = validateDecryptedVault(decryptedJson);
-  return validatedDomain;
+  const result: ImportedVaultResult = {
+    ...validatedDomain,
+    ...(container.attachments?.length ? { bundledAttachments: container.attachments } : {}),
+  };
+  return result;
 }

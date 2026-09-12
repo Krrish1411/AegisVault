@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Key, Globe, User, FileText, Star, Lock, Sparkles, Layers, Clock } from 'lucide-react';
+import { Key, Globe, User, FileText, Star, Lock, Sparkles, Layers, Clock, ShieldCheck } from 'lucide-react';
 import { Dialog } from '@/ui/primitives/Dialog';
 import { Button } from '@/ui/primitives/Button';
 import { Input } from '@/ui/primitives/Input';
 import { SecretInput } from '@/ui/primitives/SecretInput';
 import { CustomSelect } from '@/ui/primitives/CustomSelect';
 import { GeneratorModal } from '@/features/generator/GeneratorModal';
+import { generateTotp, parseOtpauthUri } from '@/domain/totp/totpEngine';
 import type { VaultItemEnvelope, LoginPayload, PasswordHistoryEntry } from '@/domain/vault/types';
 import { appVaultService } from '@/application/services/AppVaultService';
 import { useUiStore } from '@/state/uiStore';
@@ -38,6 +39,11 @@ export function AddEditPasswordModal({
   const [expirationOption, setExpirationOption] = React.useState<string>('never');
   const [customExpiryDate, setCustomExpiryDate] = React.useState<string>('');
 
+  // 2FA TOTP Authenticator State
+  const [totpSecret, setTotpSecret] = React.useState('');
+  const [liveTotpCode, setLiveTotpCode] = React.useState<string | null>(null);
+  const [totpCountdown, setTotpCountdown] = React.useState<number>(30);
+
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [showGeneratorModal, setShowGeneratorModal] = React.useState(false);
@@ -60,6 +66,8 @@ export function AddEditPasswordModal({
       setNotes(payload.notes ?? '');
       setFavorite(editingItem.favorite);
       setTargetVaultId(editingItem.vaultId || 'vault-personal');
+      const rawTotp = payload.totpSecret || (payload as Record<string, unknown>).totp as string || '';
+      setTotpSecret(rawTotp);
 
       if (payload.expirationIntervalDays) {
         setExpirationOption(String(payload.expirationIntervalDays));
@@ -81,9 +89,51 @@ export function AddEditPasswordModal({
       setTargetVaultId(activeVaultId === 'all' ? 'vault-personal' : activeVaultId);
       setExpirationOption('never');
       setCustomExpiryDate('');
+      setTotpSecret('');
     }
     setError(undefined);
   }, [editingItem, open, activeVaultId]);
+
+  const handleTotpChange = (val: string) => {
+    const trimmed = val.trim();
+    if (trimmed.startsWith('otpauth://')) {
+      try {
+        const parsed = parseOtpauthUri(trimmed);
+        setTotpSecret(parsed.secret);
+        if (!title && parsed.issuer) setTitle(parsed.issuer);
+        if (!username && parsed.account) setUsername(parsed.account);
+        return;
+      } catch {
+        // keep fallback
+      }
+    }
+    setTotpSecret(val);
+  };
+
+  React.useEffect(() => {
+    if (!totpSecret.trim()) {
+      setLiveTotpCode(null);
+      return;
+    }
+    let active = true;
+    const update = async () => {
+      try {
+        const res = await generateTotp(totpSecret.trim());
+        if (active) {
+          setLiveTotpCode(res.code);
+          setTotpCountdown(res.secondsRemaining);
+        }
+      } catch {
+        if (active) setLiveTotpCode(null);
+      }
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [totpSecret]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +173,7 @@ export function AddEditPasswordModal({
         username: username.trim(),
         password,
         urls: website.trim() ? [website.trim()] : [],
+        ...(totpSecret.trim() ? { totpSecret: totpSecret.trim(), totp: totpSecret.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         ...(expiresAt ? { expiresAt } : {}),
         ...(expirationIntervalDays ? { expirationIntervalDays } : {}),
@@ -282,6 +333,35 @@ export function AddEditPasswordModal({
               disabled={isSaving}
               allowCopy={false}
             />
+          </div>
+
+          {/* Two-Factor Authentication (TOTP / Authenticator) */}
+          <div className="space-y-2 p-3 rounded-xl border border-line bg-surface-subtle">
+            <div className="flex items-center justify-between">
+              <label htmlFor="item-totp" className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-accent" />
+                <span>Two-Factor Authenticator (TOTP)</span>
+              </label>
+              {liveTotpCode && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted">Changes in {totpCountdown}s</span>
+                  <span className="font-mono text-xs font-bold text-accent px-2 py-0.5 rounded-md bg-accent/10 tracking-wider">
+                    {liveTotpCode.slice(0, 3)} {liveTotpCode.slice(3)}
+                  </span>
+                </div>
+              )}
+            </div>
+            <Input
+              id="item-totp"
+              value={totpSecret}
+              onChange={(e) => handleTotpChange(e.target.value)}
+              placeholder="Base32 key (e.g. JBSWY3DPEHPK3PXP) or otpauth:// URI"
+              disabled={isSaving}
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-text-muted">
+              Paste secret key or <span className="font-mono text-[10px]">otpauth://</span> URI to generate live 6-digit verification codes.
+            </p>
           </div>
 
           {/* Password Expiration & Age Policy */}

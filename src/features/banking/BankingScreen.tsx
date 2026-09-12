@@ -47,7 +47,7 @@ export function BankingScreen() {
 
       setItems(results);
     }
-  }, [searchQuery, filterType, filterFavoritesOnly, vaultRevision]);
+  }, [searchQuery, filterType, filterFavoritesOnly]);
 
   React.useEffect(() => {
     refreshBanking();

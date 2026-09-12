@@ -104,7 +104,7 @@ export function PasswordsScreen() {
         return found ?? results[0] ?? null;
       });
     }
-  }, [searchQuery, filterFavoriteOnly, filterArchivedOnly, sortOrder, activeVaultId, vaultRevision]);
+  }, [searchQuery, filterFavoriteOnly, filterArchivedOnly, sortOrder, activeVaultId]);
 
   React.useEffect(() => {
     refreshVault();

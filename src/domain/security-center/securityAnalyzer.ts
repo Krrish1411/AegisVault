@@ -266,6 +266,51 @@ export function analyzeVaultHealth(
     }
   }
 
+  // Check Banking Credentials (Net Banking, Profile & Transaction Passwords)
+  const bankItems = domain.items.filter((item) => item.type === 'bank_account');
+  for (const item of bankItems) {
+    const payload = item.payload as Record<string, unknown>;
+    const passwordsToCheck = [
+      { key: 'loginPassword', label: 'Net Banking Login Password', val: payload.loginPassword as string | undefined },
+      { key: 'profilePassword', label: 'Profile Password', val: payload.profilePassword as string | undefined },
+      { key: 'transactionPassword', label: 'Transaction Password', val: payload.transactionPassword as string | undefined },
+    ];
+
+    for (const { key, label, val } of passwordsToCheck) {
+      if (!val) continue;
+      if (isCommonPassword(val)) {
+        commonCount++;
+        findings.push({
+          id: `finding-common-${item.id}-${key}`,
+          itemId: item.id,
+          itemTitle: `${item.title} (${label})`,
+          itemType: item.type,
+          vulnerability: 'common',
+          severity: 'critical',
+          title: `Common / Compromised ${label}`,
+          description: `The ${label.toLowerCase()} for "${item.title}" appears in known breach lists and is easily guessable.`,
+          remediationAction: 'Change this banking password immediately to a strong, generated secret.',
+        });
+      } else {
+        const entropy = calculatePasswordEntropy(val);
+        if (val.length < 10 || entropy.entropyBits < 50) {
+          weakCount++;
+          findings.push({
+            id: `finding-weak-${item.id}-${key}`,
+            itemId: item.id,
+            itemTitle: `${item.title} (${label})`,
+            itemType: item.type,
+            vulnerability: 'weak',
+            severity: 'high',
+            title: `Weak ${label}`,
+            description: `${label} has low entropy (${entropy.entropyBits} bits) or length under 10 characters.`,
+            remediationAction: 'Strengthen this banking credential.',
+          });
+        }
+      }
+    }
+  }
+
   // System Security Posture
   const autoLockActive = domain.settings.autoLockMinutes > 0;
   const systemStatus: SystemSecurityPosture = {

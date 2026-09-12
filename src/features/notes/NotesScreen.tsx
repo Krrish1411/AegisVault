@@ -65,7 +65,7 @@ export function NotesScreen() {
 
       setNotes(results);
     }
-  }, [searchQuery, filterFavoritesOnly, vaultRevision]);
+  }, [searchQuery, filterFavoritesOnly]);
 
   React.useEffect(() => {
     refreshNotes();

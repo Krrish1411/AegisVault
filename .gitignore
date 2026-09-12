@@ -39,6 +39,10 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
+# Scratch notes
+prompt*.txt
+
+
 # Test coverage & reports
 coverage/
 test-results/

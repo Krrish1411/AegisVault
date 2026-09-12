@@ -63,7 +63,7 @@ export function WalletsScreen() {
         setSelectedId(filtered[0]?.id ?? null);
       }
     }
-  }, [selectedId, vaultRevision]);
+  }, [selectedId]);
 
   React.useEffect(() => {
     loadData();

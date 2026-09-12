@@ -17,7 +17,7 @@ import type {
 } from '@/domain/vault/types';
 import { createEmergencyGrantPackage } from '@/domain/emergency/emergencyAccessEngine';
 import { DEFAULT_VAULT_SETTINGS } from '@/domain/vault/types';
-import type { VaultRepository } from '@/storage/ports/VaultRepository';
+import type { VaultRepository, EncryptedAttachmentRecord } from '@/storage/ports/VaultRepository';
 import { dexieVaultRepository } from '@/storage/indexeddb/DexieVaultRepository';
 import {
   createEncryptedVault,
@@ -275,7 +275,21 @@ export class AppVaultService implements VaultService {
 
   async exportVault(backupPassword: string): Promise<string> {
     const { domain } = this.ensureUnlocked();
-    return await exportEncryptedVault(domain, backupPassword);
+    let attachmentRecords: EncryptedAttachmentRecord[] | undefined = undefined;
+    if (domain.attachments?.length && this.repository.readAttachment) {
+      attachmentRecords = [];
+      for (const att of domain.attachments) {
+        try {
+          const record = await this.repository.readAttachment(att.id);
+          if (record) {
+            attachmentRecords.push(record);
+          }
+        } catch {
+          // ignore unreadable
+        }
+      }
+    }
+    return await exportEncryptedVault(domain, backupPassword, undefined, attachmentRecords);
   }
 
   async importVault(
@@ -291,6 +305,17 @@ export class AppVaultService implements VaultService {
 
     // 1. Decrypt and strictly validate the imported backup
     const importedDomain = await importEncryptedVault(backupJson, backupPassword);
+
+    // Restore any bundled attachments to repository storage
+    if (importedDomain.bundledAttachments?.length && this.repository.saveAttachment) {
+      for (const att of importedDomain.bundledAttachments) {
+        try {
+          await this.repository.saveAttachment(att);
+        } catch (err) {
+          logger.warn(`Failed to restore bundled attachment ${att.id}`, { component: 'AppVaultService', error: err });
+        }
+      }
+    }
 
     const now = new Date().toISOString();
     let nextDomain: DecryptedVaultDomain;
@@ -430,7 +455,28 @@ export class AppVaultService implements VaultService {
     }
 
     const now = new Date().toISOString();
+    const targetItem = domain.items.find((i) => i.id === itemId);
     const nextItems = domain.items.filter((i) => i.id !== itemId);
+
+    // Clean up any associated attachments to prevent orphaned records in storage
+    const targetAttachmentIds = new Set<string>(targetItem?.attachmentIds ?? []);
+    for (const att of domain.attachments ?? []) {
+      if (att.linkedItemId === itemId) {
+        targetAttachmentIds.add(att.id);
+      }
+    }
+
+    if (targetAttachmentIds.size > 0 && this.repository.deleteAttachment) {
+      for (const attId of targetAttachmentIds) {
+        try {
+          await this.repository.deleteAttachment(attId);
+        } catch (err) {
+          logger.warn(`Failed to delete orphaned attachment blob ${attId}`, { component: 'AppVaultService', error: err });
+        }
+      }
+    }
+
+    const nextAttachments = (domain.attachments ?? []).filter((a) => !targetAttachmentIds.has(a.id));
 
     const auditEvent: AuditEvent = {
       id: `audit-${Date.now()}-${itemId}`,
@@ -445,6 +491,7 @@ export class AppVaultService implements VaultService {
         updatedAt: now,
       },
       items: nextItems,
+      attachments: nextAttachments,
       auditEvents: [auditEvent, ...domain.auditEvents],
     };
 

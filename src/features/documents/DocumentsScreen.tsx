@@ -66,7 +66,7 @@ export function DocumentsScreen() {
     }
     const quotaInfo = await getStorageQuotaEstimate();
     setQuota(quotaInfo);
-  }, [vaultRevision]);
+  }, []);
 
   React.useEffect(() => {
     refreshAttachments();
@@ -210,6 +210,7 @@ export function DocumentsScreen() {
   };
 
   const availableItems = React.useMemo(() => {
+    void vaultRevision;
     const domain = appVaultService.getDecryptedVault();
     return domain?.items ?? [];
   }, [vaultRevision]);

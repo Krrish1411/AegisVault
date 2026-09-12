@@ -44,7 +44,7 @@ export function SecurityCenterScreen() {
       const result = analyzeVaultHealth(domain);
       setReport(result);
     }
-  }, [vaultRevision]);
+  }, []);
 
   React.useEffect(() => {
     runAudit();

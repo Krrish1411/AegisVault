@@ -22,7 +22,9 @@ export function App() {
 
   // Initialize network guard, theme, and PWA service worker on mount
   React.useEffect(() => {
-    networkGuard.install();
+    networkGuard.install({
+      allowedDomains: ['api.pwnedpasswords.com', 'buymeacoffee.com', 'cdnjs.buymeacoffee.com'],
+    });
     registerPwaServiceWorker();
     setTheme(theme);
     setThemePalette(themePalette);

@@ -23,6 +23,7 @@ import { CommandPalette } from '@/ui/navigation/CommandPalette';
 import { MobileBottomNav } from '@/ui/layout/MobileBottomNav';
 import { VaultSwitcher } from '@/ui/navigation/VaultSwitcher';
 import { ThemeSelector } from '@/ui/navigation/ThemeSelector';
+import { BuyMeACoffeeButton } from '@/ui/primitives/BuyMeACoffeeButton';
 import { ImportExternalModal } from '@/features/migration/ImportExternalModal';
 import { KeyboardShortcutsModal } from '@/features/shortcuts/KeyboardShortcutsModal';
 import { getShortcuts, matchesShortcut } from '@/domain/shortcuts/shortcutEngine';
@@ -260,13 +261,21 @@ export function AppShell({ children }: AppShellProps) {
             </nav>
           </div>
 
-          <div className="border-t border-line pt-3 px-2 space-y-1 shrink-0 font-mono">
-            <div className="flex items-center justify-between text-[11px] text-ink/45">
+          <div className="border-t border-line pt-3 px-2 space-y-2 shrink-0">
+            <div className="flex items-center justify-between text-[11px] font-mono text-ink/50">
               <span>AegisVault v1.0</span>
-              <span className="text-accent font-semibold">Local Only</span>
+              <span className="text-pine-600 dark:text-pine-400 font-semibold">Offline Safe</span>
             </div>
-            <div className="text-[10px] text-ink/40 tracking-tight">
-              AegisVault • Crafted by Krish Patel
+            <div className="flex items-center justify-between gap-1 pt-1">
+              <div className="flex items-center gap-1.5 text-xs text-ink/70">
+                <span className="text-[11px]">Crafted by</span>
+                <span className="font-extrabold tracking-wide text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/25 text-[11px] shadow-xs">
+                  Krish Patel
+                </span>
+              </div>
+            </div>
+            <div className="pt-1">
+              <BuyMeACoffeeButton size="sm" className="w-full" />
             </div>
           </div>
         </aside>

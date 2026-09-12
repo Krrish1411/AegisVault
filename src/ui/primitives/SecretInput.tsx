@@ -45,7 +45,7 @@ export const SecretInput = React.forwardRef<HTMLInputElement, SecretInputProps>(
               'flex h-11 w-full rounded-xl border border-line bg-card px-3.5 py-2 text-base sm:text-sm text-ink placeholder:text-ink/35 font-mono transition-all shadow-xs outline-none',
               'focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              allowCopy ? 'pr-20' : 'pr-10',
+              allowCopy ? 'pr-24' : 'pr-14',
               error && 'border-danger focus-visible:ring-danger/20 focus-visible:border-danger',
               className
             )}
@@ -53,12 +53,12 @@ export const SecretInput = React.forwardRef<HTMLInputElement, SecretInputProps>(
             disabled={disabled}
             {...props}
           />
-          <div className="absolute right-2 flex items-center gap-1">
+          <div className="absolute right-1.5 flex items-center">
             <button
               type="button"
               onClick={toggleReveal}
               aria-label={revealed ? 'Hide secret' : 'Reveal secret'}
-              className="p-1 text-text-muted hover:text-text-primary rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+              className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center text-text-muted hover:text-text-primary rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-colors cursor-pointer"
               tabIndex={0}
             >
               {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -71,7 +71,7 @@ export const SecretInput = React.forwardRef<HTMLInputElement, SecretInputProps>(
                 disabled={!value}
                 aria-label={copied ? 'Copied to clipboard' : 'Copy secret'}
                 className={cn(
-                  'p-1 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors',
+                  'min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-colors cursor-pointer',
                   copied ? 'text-success' : 'text-text-muted hover:text-text-primary disabled:opacity-30'
                 )}
                 tabIndex={0}

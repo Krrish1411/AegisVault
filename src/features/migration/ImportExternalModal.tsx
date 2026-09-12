@@ -118,7 +118,7 @@ export function ImportExternalModal({
         onOpenChange(newOpen);
       }}
       title="Import from Other Password Managers"
-      description="Migrate accounts, logins, and notes from Bitwarden, 1Password, KeePass, or Browser CSV exports."
+      description="Migrate credentials from Bitwarden, 1Password, LastPass, Dashlane, KeePass, Chrome, Safari, Firefox, Proton Pass, and RoboForm."
     >
       <div className="space-y-4 pt-2">
         {error && (
@@ -138,7 +138,7 @@ export function ImportExternalModal({
                     {filename ? filename : 'Select CSV or JSON export file'}
                   </div>
                   <div className="text-[10px] text-text-muted">
-                    Supports Bitwarden (JSON/CSV), 1Password, KeePass, Chrome, Safari
+                    Bitwarden, 1Password, LastPass, Dashlane, KeePass, Chrome, Safari, Firefox, Proton Pass
                   </div>
                   <input
                     type="file"
@@ -174,8 +174,15 @@ export function ImportExternalModal({
                 <option value="bitwarden_json">Bitwarden JSON</option>
                 <option value="bitwarden_csv">Bitwarden CSV</option>
                 <option value="1password_csv">1Password CSV</option>
+                <option value="lastpass_csv">LastPass CSV</option>
+                <option value="dashlane_csv">Dashlane CSV</option>
                 <option value="keepass_csv">KeePass CSV</option>
-                <option value="browser_csv">Chrome / Firefox / Safari CSV</option>
+                <option value="safari_csv">Apple Safari / iCloud Keychain CSV</option>
+                <option value="proton_csv">Proton Pass CSV</option>
+                <option value="roboform_csv">RoboForm CSV</option>
+                <option value="enpass_csv">Enpass CSV</option>
+                <option value="browser_csv">Chrome / Edge / Firefox CSV</option>
+                <option value="generic_csv">Generic CSV</option>
               </select>
             </div>
 
