@@ -147,7 +147,7 @@ export function SettingsScreen() {
 
   return (
     <>
-      <div className="space-y-8 animate-fade-in w-full max-w-5xl mx-auto">
+      <div className="space-y-8 animate-fade-in w-full">
         {/* Header */}
         <div className="border-b border-border pb-6">
           <h1 className="text-2xl font-bold tracking-tight text-text-primary">Settings & Security</h1>

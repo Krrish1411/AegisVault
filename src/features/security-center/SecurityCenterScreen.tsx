@@ -28,6 +28,18 @@ import { OnlineBreachCheckModal } from './OnlineBreachCheckModal';
 import type { VaultItemEnvelope } from '@/domain/vault/types';
 import { useUiStore } from '@/state/uiStore';
 
+interface MergedAccountFinding {
+  itemId: string;
+  itemTitle: string;
+  itemType: string;
+  username?: string;
+  highestSeverity: 'critical' | 'high' | 'medium' | 'low';
+  findings: SecurityFinding[];
+  hasExpired: boolean;
+  hasExpiringSoon: boolean;
+  vulnerabilities: Set<string>;
+}
+
 export function SecurityCenterScreen() {
   const addToast = useUiStore((state) => state.addToast);
   const vaultRevision = useUiStore((state) => state.vaultRevision);
@@ -56,49 +68,130 @@ export function SecurityCenterScreen() {
     runAudit();
   }, [runAudit, vaultRevision]);
 
-  const handleFixFinding = (finding: SecurityFinding) => {
+  const handleFixAccount = (itemId: string) => {
     const domain = appVaultService.getDecryptedVault();
-    const item = domain?.items.find((i) => i.id === finding.itemId);
+    const item = domain?.items.find((i) => i.id === itemId);
     if (item) {
       setEditingItem(item);
       setShowEditModal(true);
     }
   };
 
-  const priorityFindings = React.useMemo(() => {
+  const mergedAccounts = React.useMemo<MergedAccountFinding[]>(() => {
     if (!report) return [];
-    return report.findings.filter(
-      (f) => f.vulnerability !== 'missing_2fa' && f.vulnerability !== 'old'
+    const map = new Map<string, MergedAccountFinding>();
+    const severityRank = {
+      critical: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    } as const;
+
+    for (const finding of report.findings) {
+      let target = map.get(finding.itemId);
+      if (!target) {
+        target = {
+          itemId: finding.itemId,
+          itemTitle: finding.itemTitle,
+          itemType: finding.itemType,
+          ...(finding.username ? { username: finding.username } : {}),
+          highestSeverity: finding.severity,
+          findings: [],
+          hasExpired: false,
+          hasExpiringSoon: false,
+          vulnerabilities: new Set<string>(),
+        };
+        map.set(finding.itemId, target);
+      }
+
+      target.findings.push(finding);
+      target.vulnerabilities.add(finding.vulnerability);
+
+      const findingWeight = severityRank[finding.severity] ?? 1;
+      const currentWeight = severityRank[target.highestSeverity] ?? 1;
+      if (findingWeight > currentWeight) {
+        target.highestSeverity = finding.severity;
+      }
+      if (finding.vulnerability === 'expired') {
+        target.hasExpired = true;
+      }
+      if (finding.vulnerability === 'expiring_soon') {
+        target.hasExpiringSoon = true;
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const diff = (severityRank[b.highestSeverity] ?? 1) - (severityRank[a.highestSeverity] ?? 1);
+      if (diff !== 0) return diff;
+      const countDiff = b.findings.length - a.findings.length;
+      if (countDiff !== 0) return countDiff;
+      return a.itemTitle.localeCompare(b.itemTitle);
+    });
+  }, [report]);
+
+  const priorityAccounts = React.useMemo(() => {
+    return mergedAccounts.filter((account) =>
+      account.findings.some(
+        (f) => f.vulnerability !== 'missing_2fa' && f.vulnerability !== 'old'
+      )
     );
-  }, [report]);
+  }, [mergedAccounts]);
 
-  const informationalCount = React.useMemo(() => {
-    if (!report) return 0;
-    return (report.missing2faCount ?? 0) + (report.oldCount ?? 0);
-  }, [report]);
+  const informationalAccountCount = React.useMemo(() => {
+    return mergedAccounts.length - priorityAccounts.length;
+  }, [mergedAccounts, priorityAccounts]);
 
-  const filteredFindings = React.useMemo(() => {
-    if (!report) return [];
-    let list: readonly SecurityFinding[] = report.findings;
+  const filterCounts = React.useMemo(() => {
+    const counts = {
+      common: 0,
+      weak: 0,
+      reused: 0,
+      expired: 0,
+      expiring_soon: 0,
+      missing_2fa: 0,
+      old: 0,
+    };
+    for (const acc of mergedAccounts) {
+      if (acc.vulnerabilities.has('common')) counts.common++;
+      if (acc.vulnerabilities.has('weak')) counts.weak++;
+      if (acc.vulnerabilities.has('reused')) counts.reused++;
+      if (acc.vulnerabilities.has('expired')) counts.expired++;
+      if (acc.vulnerabilities.has('expiring_soon')) counts.expiring_soon++;
+      if (acc.vulnerabilities.has('missing_2fa')) counts.missing_2fa++;
+      if (acc.vulnerabilities.has('old')) counts.old++;
+    }
+    return counts;
+  }, [mergedAccounts]);
+
+  const filteredAccounts = React.useMemo(() => {
+    let list = mergedAccounts;
     if (activeFilter === 'priority') {
-      list = priorityFindings;
+      list = priorityAccounts;
     } else if (activeFilter !== 'all') {
-      list = report.findings.filter((f) => f.vulnerability === activeFilter);
+      list = mergedAccounts.filter((a) => a.vulnerabilities.has(activeFilter));
     }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
-        (f) =>
-          f.itemTitle.toLowerCase().includes(q) ||
-          (f.username && f.username.toLowerCase().includes(q)) ||
-          f.description.toLowerCase().includes(q) ||
-          f.title.toLowerCase().includes(q)
+        (a) =>
+          a.itemTitle.toLowerCase().includes(q) ||
+          (a.username && a.username.toLowerCase().includes(q)) ||
+          a.findings.some(
+            (f) =>
+              f.title.toLowerCase().includes(q) ||
+              f.description.toLowerCase().includes(q) ||
+              f.remediationAction.toLowerCase().includes(q)
+          )
       );
     }
 
     return list;
-  }, [report, activeFilter, priorityFindings, searchQuery]);
+  }, [mergedAccounts, priorityAccounts, activeFilter, searchQuery]);
+
+  const totalFindingsInView = React.useMemo(() => {
+    return filteredAccounts.reduce((acc, a) => acc + a.findings.length, 0);
+  }, [filteredAccounts]);
 
   if (!report) {
     return (
@@ -282,7 +375,7 @@ export function SecurityCenterScreen() {
       {/* Actionable Findings Section */}
       <div className="space-y-4">
         {/* Priority Focus Mode Banner */}
-        {activeFilter === 'priority' && informationalCount > 0 && (
+        {activeFilter === 'priority' && informationalAccountCount > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-accent/25 bg-accent/5 text-xs text-text-secondary">
             <div className="flex items-center gap-2.5">
               <div className="h-8 w-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
@@ -290,7 +383,7 @@ export function SecurityCenterScreen() {
               </div>
               <div>
                 <span className="font-semibold text-text-primary">Priority Focus Mode Active: </span>
-                Showing <strong className="text-accent">{priorityFindings.length}</strong> high-risk vulnerabilities. <span className="text-text-muted">({informationalCount} informational suggestions like missing 2FA and stale passwords are hidden)</span>
+                Showing <strong className="text-accent">{priorityAccounts.length}</strong> accounts with high-risk vulnerabilities. <span className="text-text-muted">({informationalAccountCount} accounts with only informational suggestions like missing 2FA are hidden)</span>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -300,7 +393,7 @@ export function SecurityCenterScreen() {
                 onClick={() => setActiveFilter('all')}
                 className="h-7 text-xs border-accent/30 text-accent hover:bg-accent/10"
               >
-                Show All ({report.findings.length})
+                Show All ({mergedAccounts.length} Accounts)
               </Button>
             </div>
           </div>
@@ -309,9 +402,9 @@ export function SecurityCenterScreen() {
         <div className="flex flex-col gap-3 border-b border-border pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
-              <span>Actionable Health Findings</span>
-              <Badge variant={filteredFindings.length === 0 ? 'success' : 'default'}>
-                {filteredFindings.length}
+              <span>Actionable Account Health Findings</span>
+              <Badge variant={filteredAccounts.length === 0 ? 'success' : 'default'} className="font-mono">
+                {filteredAccounts.length} {filteredAccounts.length === 1 ? 'account' : 'accounts'} ({totalFindingsInView} {totalFindingsInView === 1 ? 'warning' : 'warnings'})
               </Badge>
             </h3>
 
@@ -324,7 +417,7 @@ export function SecurityCenterScreen() {
                   setSearchQuery(e.target.value);
                   setVisibleLimit(30);
                 }}
-                placeholder="Filter findings..."
+                placeholder="Filter accounts & warnings..."
                 className="pl-8 h-8 text-xs w-full"
               />
             </div>
@@ -342,7 +435,7 @@ export function SecurityCenterScreen() {
               className={`h-7 text-xs gap-1 ${activeFilter === 'priority' ? 'bg-accent text-white' : ''}`}
             >
               <Zap className="h-3 w-3" />
-              <span>Priority Risks ({priorityFindings.length})</span>
+              <span>Priority Accounts ({priorityAccounts.length})</span>
             </Button>
 
             <Button
@@ -354,10 +447,10 @@ export function SecurityCenterScreen() {
               }}
               className="h-7 text-xs"
             >
-              All ({report.findings.length})
+              All ({mergedAccounts.length})
             </Button>
 
-            {report.commonCount > 0 && (
+            {filterCounts.common > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'common' ? 'danger' : 'ghost'}
@@ -367,11 +460,11 @@ export function SecurityCenterScreen() {
                 }}
                 className={`h-7 text-xs ${activeFilter === 'common' ? 'text-white font-semibold' : 'text-danger'}`}
               >
-                Common ({report.commonCount})
+                Common ({filterCounts.common})
               </Button>
             )}
 
-            {report.weakCount > 0 && (
+            {filterCounts.weak > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'weak' ? 'default' : 'ghost'}
@@ -381,11 +474,11 @@ export function SecurityCenterScreen() {
                 }}
                 className="h-7 text-xs"
               >
-                Weak ({report.weakCount})
+                Weak ({filterCounts.weak})
               </Button>
             )}
 
-            {report.reusedCount > 0 && (
+            {filterCounts.reused > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'reused' ? 'default' : 'ghost'}
@@ -395,11 +488,11 @@ export function SecurityCenterScreen() {
                 }}
                 className="h-7 text-xs"
               >
-                Reused ({report.reusedCount})
+                Reused ({filterCounts.reused})
               </Button>
             )}
 
-            {report.expiredCount > 0 && (
+            {filterCounts.expired > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'expired' ? 'danger' : 'ghost'}
@@ -409,11 +502,11 @@ export function SecurityCenterScreen() {
                 }}
                 className={`h-7 text-xs ${activeFilter === 'expired' ? 'text-white font-semibold' : 'text-danger'}`}
               >
-                Expired ({report.expiredCount})
+                Expired ({filterCounts.expired})
               </Button>
             )}
 
-            {report.expiringSoonCount > 0 && (
+            {filterCounts.expiring_soon > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'expiring_soon' ? 'secondary' : 'ghost'}
@@ -423,11 +516,11 @@ export function SecurityCenterScreen() {
                 }}
                 className={`h-7 text-xs ${activeFilter === 'expiring_soon' ? 'text-amber-700 dark:text-amber-300 font-semibold bg-amber-100 dark:bg-amber-950/60' : 'text-amber-500'}`}
               >
-                Expiring Soon ({report.expiringSoonCount})
+                Expiring Soon ({filterCounts.expiring_soon})
               </Button>
             )}
 
-            {report.missing2faCount > 0 && (
+            {filterCounts.missing_2fa > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'missing_2fa' ? 'default' : 'ghost'}
@@ -437,11 +530,11 @@ export function SecurityCenterScreen() {
                 }}
                 className="h-7 text-xs"
               >
-                Missing 2FA ({report.missing2faCount})
+                Missing 2FA ({filterCounts.missing_2fa})
               </Button>
             )}
 
-            {report.oldCount > 0 && (
+            {filterCounts.old > 0 && (
               <Button
                 size="sm"
                 variant={activeFilter === 'old' ? 'default' : 'ghost'}
@@ -451,88 +544,127 @@ export function SecurityCenterScreen() {
                 }}
                 className="h-7 text-xs"
               >
-                Old ({report.oldCount})
+                Old ({filterCounts.old})
               </Button>
             )}
           </div>
         </div>
 
-        {filteredFindings.length === 0 ? (
+        {filteredAccounts.length === 0 ? (
           <EmptyState
-            title={searchQuery ? 'No Matching Findings' : 'No Vulnerabilities Detected'}
+            title={searchQuery ? 'No Matching Accounts' : 'No Vulnerabilities Detected'}
             description={
               searchQuery
-                ? `No security findings matched "${searchQuery}".`
+                ? `No accounts with security findings matched "${searchQuery}".`
                 : 'All accounts in this category meet strict cryptographic entropy and uniqueness standards.'
             }
             icon={<CheckCircle2 className="h-8 w-8 text-success" />}
           />
         ) : (
-          <div className="space-y-3">
-            {filteredFindings.slice(0, visibleLimit).map((finding) => (
+          <div className="space-y-3.5">
+            {filteredAccounts.slice(0, visibleLimit).map((account) => (
               <Card
-                key={finding.id}
-                className="border-border bg-surface transition-all hover:border-border/80 shadow-subtle"
+                key={account.itemId}
+                className="border-border bg-surface transition-all hover:border-border/80 shadow-subtle overflow-hidden"
               >
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-text-primary">
-                        {finding.itemTitle}
-                      </span>
-                      {finding.username && (
-                        <span className="text-xs font-mono text-text-muted">
-                          ({finding.username})
-                        </span>
-                      )}
-                      <Badge
-                        variant={
-                          finding.severity === 'critical'
-                            ? 'danger'
-                            : finding.severity === 'high'
-                              ? 'warning'
-                              : 'default'
-                        }
-                      >
-                        {finding.title}
-                      </Badge>
+                <CardContent className="p-4 sm:p-5 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 text-accent shrink-0 border border-accent/20">
+                        <Key className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-text-primary truncate">
+                            {account.itemTitle}
+                          </span>
+                          {account.username && (
+                            <span className="text-xs font-mono text-text-muted truncate">
+                              ({account.username})
+                            </span>
+                          )}
+                          <Badge
+                            variant={
+                              account.highestSeverity === 'critical'
+                                ? 'danger'
+                                : account.highestSeverity === 'high'
+                                  ? 'warning'
+                                  : 'default'
+                            }
+                            className="text-[10px] uppercase font-bold"
+                          >
+                            {account.highestSeverity} risk
+                          </Badge>
+                          <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-surface-subtle border border-border text-text-muted">
+                            {account.findings.length} {account.findings.length === 1 ? 'warning' : 'warnings'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      {finding.description}
-                    </p>
-
-                    <p className="text-[11px] text-accent font-medium">
-                      Action: {finding.remediationAction}
-                    </p>
+                    <Button
+                      size="sm"
+                      variant={account.hasExpired ? 'danger' : 'outline'}
+                      onClick={() => handleFixAccount(account.itemId)}
+                      className="self-start sm:self-auto gap-1.5 text-xs shrink-0"
+                    >
+                      {account.hasExpired || account.hasExpiringSoon ? (
+                        <>
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span>Rotate Password</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit2 className="h-3.5 w-3.5" />
+                          <span>Fix Credential</span>
+                        </>
+                      )}
+                    </Button>
                   </div>
 
-                  <Button
-                    size="sm"
-                    variant={finding.vulnerability === 'expired' ? 'default' : 'outline'}
-                    onClick={() => handleFixFinding(finding)}
-                    className="self-start sm:self-auto gap-1.5 text-xs shrink-0"
-                  >
-                    {finding.vulnerability === 'expired' || finding.vulnerability === 'expiring_soon' ? (
-                      <>
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        <span>Rotate Password</span>
-                      </>
-                    ) : (
-                      <>
-                        <Edit2 className="h-3.5 w-3.5" />
-                        <span>Fix Credential</span>
-                      </>
-                    )}
-                  </Button>
+                  {/* Grouped Warnings List */}
+                  <div className="space-y-2">
+                    {account.findings.map((finding) => (
+                      <div
+                        key={finding.id}
+                        className="p-3 rounded-lg bg-surface-subtle/80 border border-border/50 text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`h-2 w-2 rounded-full shrink-0 ${
+                                finding.severity === 'critical'
+                                  ? 'bg-danger'
+                                  : finding.severity === 'high'
+                                    ? 'bg-warning'
+                                    : 'bg-accent'
+                              }`}
+                            />
+                            <span className="font-semibold text-text-primary">
+                              {finding.title}
+                            </span>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] capitalize text-text-muted">
+                            {finding.vulnerability.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-text-secondary leading-relaxed pl-4">
+                          {finding.description}
+                        </p>
+                        <p className="text-[11px] text-accent font-medium pl-4">
+                          Action: {finding.remediationAction}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             ))}
 
-            {filteredFindings.length > visibleLimit && (
+            {filteredAccounts.length > visibleLimit && (
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-border">
                 <span className="text-xs text-text-muted font-mono">
-                  Showing {Math.min(visibleLimit, filteredFindings.length)} of {filteredFindings.length} findings
+                  Showing {Math.min(visibleLimit, filteredAccounts.length)} of {filteredAccounts.length} accounts
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
@@ -547,10 +679,10 @@ export function SecurityCenterScreen() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setVisibleLimit(filteredFindings.length)}
+                    onClick={() => setVisibleLimit(filteredAccounts.length)}
                     className="text-xs text-accent"
                   >
-                    Show All ({filteredFindings.length})
+                    Show All ({filteredAccounts.length})
                   </Button>
                 </div>
               </div>
