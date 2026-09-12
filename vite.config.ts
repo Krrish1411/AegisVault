@@ -2,8 +2,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/AegisVault/' : '/',
+export default defineConfig(({ mode }) => ({
+  base: mode === 'android' || process.env.BUILD_TARGET === 'android' ? './' : (process.env.GITHUB_ACTIONS ? '/AegisVault/' : '/'),
   plugins: [react()],
   resolve: {
     alias: {
@@ -18,4 +18,4 @@ export default defineConfig({
     target: 'esnext',
     sourcemap: true,
   },
-});
+}));

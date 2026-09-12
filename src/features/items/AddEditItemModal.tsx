@@ -3,6 +3,7 @@ import {
   Star,
   Lock,
   Sparkles,
+  MapPin,
 } from 'lucide-react';
 import { Dialog } from '@/ui/primitives/Dialog';
 import { Button } from '@/ui/primitives/Button';
@@ -11,6 +12,7 @@ import { SecretInput } from '@/ui/primitives/SecretInput';
 import { CustomSelect, type SelectOption } from '@/ui/primitives/CustomSelect';
 import { GeneratorModal } from '@/features/generator/GeneratorModal';
 import { detectCardIssuer, formatCardNumber, formatPan } from '@/domain/cards/cardHelpers';
+import { generateBurnerPersona } from '@/domain/generator/burnerPersonaGenerator';
 import type {
   VaultItemEnvelope,
   VaultItemType,
@@ -71,6 +73,34 @@ export function AddEditItemModal({
 
   const activeVaultId = useUiStore((s) => s.activeVaultId);
   const addToast = useUiStore((s) => s.addToast);
+
+  const handleGenerateBurnerPersona = () => {
+    const burner = generateBurnerPersona();
+    if (!title) {
+      setTitle(burner.title);
+    }
+    setPayloadFields((prev) => ({
+      ...prev,
+      profileType: 'temporary',
+      fullName: burner.fullName ?? '',
+      company: burner.company ?? '',
+      addressLine1: burner.addressLine1 ?? '',
+      addressLine2: burner.addressLine2 ?? '',
+      city: burner.city ?? '',
+      state: burner.state ?? '',
+      postalCode: burner.postalCode ?? '',
+      country: burner.country ?? '',
+      phone: burner.phone ?? '',
+      email: burner.email ?? '',
+      purpose: burner.purpose ?? '',
+      notes: burner.notes ?? '',
+    }));
+    addToast({
+      title: 'Burner Persona Generated',
+      description: `Created disposable persona for ${burner.fullName} (${burner.city}).`,
+      variant: 'default',
+    });
+  };
 
   // Initialize form when opening
   React.useEffect(() => {
@@ -225,8 +255,9 @@ export function AddEditItemModal({
                   <option value="atm_pin">ATM / Card PIN</option>
                 </optgroup>
                 <optgroup label="Identity & Documents">
-                  <option value="document">Document / Cancelled Cheque Record</option>
+                  <option value="address">Address & Persona (Real / Burner)</option>
                   <option value="identity">Personal Identity Profile</option>
+                  <option value="document">Document / Cancelled Cheque Record</option>
                   <option value="pan">PAN Card (India)</option>
                   <option value="aadhaar">Aadhaar Card (India)</option>
                   <option value="passport">Passport</option>
@@ -743,6 +774,182 @@ export function AddEditItemModal({
                   disabled={isSaving}
                   allowCopy={false}
                   maxLength={6}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Address & Personal Persona (Real vs. Disposable Burner) */}
+          {(itemType === 'address' || itemType === 'identity') && (
+            <div className="space-y-4">
+              {/* Persona Type Toggle & Quick Generator */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-line bg-surface-subtle shadow-xs">
+                <div className="space-y-1">
+                  <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-accent" />
+                    <span>Profile Type & Privacy Level</span>
+                  </span>
+                  <p className="text-[11px] text-ink/60">
+                    Choose between your official real persona or a disposable burner persona for untrusted sites.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="inline-flex rounded-lg border border-line bg-card p-0.5 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => updateField('profileType', 'real')}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                        (payloadFields.profileType ?? 'real') === 'real'
+                          ? 'bg-pine-600 text-white shadow-xs font-bold'
+                          : 'text-ink/65 hover:text-ink'
+                      }`}
+                    >
+                      Official / Real
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateField('profileType', 'temporary')}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                        payloadFields.profileType === 'temporary'
+                          ? 'bg-accent text-white shadow-xs font-bold'
+                          : 'text-ink/65 hover:text-ink'
+                      }`}
+                    >
+                      Burner / Disposable
+                    </button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleGenerateBurnerPersona}
+                    className="gap-1.5 text-xs h-8 text-accent border-accent/30 hover:bg-accent/10 cursor-pointer"
+                    title="Generate realistic burner persona with fake name, address, and disposable email"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    <span>Generate Burner</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Personal Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Full Name / Persona Name</label>
+                  <Input
+                    value={payloadFields.fullName ?? ''}
+                    onChange={(e) => updateField('fullName', e.target.value)}
+                    placeholder="e.g. Alex Mercer"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Company / Organization (Optional)</label>
+                  <Input
+                    value={payloadFields.company ?? ''}
+                    onChange={(e) => updateField('company', e.target.value)}
+                    placeholder="e.g. Apex Ventures Ltd"
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+
+              {/* Street Address */}
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Address Line 1 (Street / Building)</label>
+                  <Input
+                    value={payloadFields.addressLine1 ?? ''}
+                    onChange={(e) => updateField('addressLine1', e.target.value)}
+                    placeholder="e.g. 742 Evergreen Terrace"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Address Line 2 (Apt / Suite / Landmark)</label>
+                  <Input
+                    value={payloadFields.addressLine2 ?? ''}
+                    onChange={(e) => updateField('addressLine2', e.target.value)}
+                    placeholder="e.g. Apt 4B / Block C"
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+
+              {/* City, State, Postal Code */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">City</label>
+                  <Input
+                    value={payloadFields.city ?? ''}
+                    onChange={(e) => updateField('city', e.target.value)}
+                    placeholder="e.g. Springfield"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">State / Province</label>
+                  <Input
+                    value={payloadFields.state ?? ''}
+                    onChange={(e) => updateField('state', e.target.value)}
+                    placeholder="e.g. OR / Maharashtra"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">ZIP / Postal PIN Code</label>
+                  <Input
+                    value={payloadFields.postalCode ?? ''}
+                    onChange={(e) => updateField('postalCode', e.target.value)}
+                    placeholder="e.g. 97477 / 400001"
+                    disabled={isSaving}
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Country & Contact Channels */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Country</label>
+                  <Input
+                    value={payloadFields.country ?? ''}
+                    onChange={(e) => updateField('country', e.target.value)}
+                    placeholder="e.g. United States / India"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Phone / Burner Number</label>
+                  <Input
+                    value={payloadFields.phone ?? ''}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    placeholder="e.g. +1 (555) 019-4821"
+                    disabled={isSaving}
+                    className="font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Email / Disposable Alias</label>
+                  <Input
+                    value={payloadFields.email ?? ''}
+                    onChange={(e) => updateField('email', e.target.value)}
+                    placeholder="e.g. burner@duck.com"
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+
+              {/* Purpose / Site Tags */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-text-secondary">Intended Purpose / Websites</label>
+                <Input
+                  value={payloadFields.purpose ?? ''}
+                  onChange={(e) => updateField('purpose', e.target.value)}
+                  placeholder="e.g. Untrusted signups, free trials, shipping coupons..."
+                  disabled={isSaving}
                 />
               </div>
             </div>

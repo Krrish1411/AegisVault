@@ -26,6 +26,8 @@ import {
   Keyboard,
   RotateCcw,
   Edit3,
+  Compass,
+  ArrowRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/ui/primitives/Card';
@@ -145,7 +147,7 @@ export function SettingsScreen() {
 
   return (
     <>
-      <div className="space-y-8 animate-fade-in w-full">
+      <div className="space-y-8 animate-fade-in w-full max-w-5xl mx-auto">
         {/* Header */}
         <div className="border-b border-border pb-6">
           <h1 className="text-2xl font-bold tracking-tight text-text-primary">Settings & Security</h1>
@@ -704,7 +706,7 @@ export function SettingsScreen() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                 <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-1">
                   <div className="flex items-center gap-2 text-text-primary font-medium">
                     <Cpu className="h-4 w-4 text-accent" />
@@ -847,6 +849,43 @@ export function SettingsScreen() {
                     Delete Entire Vault
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* App Guide & Feature Tour Navigation Card */}
+          <Card className="border-border bg-surface hover:border-accent/40 transition-colors shadow-card">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Compass className="h-5 w-5 text-accent" />
+                  <CardTitle className="text-base font-semibold">App Guide & Feature Tour</CardTitle>
+                </div>
+                <Badge variant="accent">Interactive</Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Explore the visual feature tour, verified zero-cloud architecture, cryptographic engine specifications, and comparison matrix.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-line bg-surface-subtle">
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold text-text-primary flex items-center gap-2">
+                    <span>AegisVault Onboarding & Security Walkthrough</span>
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Review how AegisVault safeguards credentials, bank accounts, UPI PINs, identities, and documents entirely on your device with zero cloud servers.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => navigate('/welcome')}
+                  className="gap-2 shrink-0 text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  <span>Open Welcome Tour</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
               </div>
             </CardContent>
           </Card>

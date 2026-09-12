@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { UserCheck, Plus, Search, Star, Filter, ChevronRight } from 'lucide-react';
+import { UserCheck, Plus, Search, Star, Filter, ChevronRight, MapPin, Sparkles, Copy, Check } from 'lucide-react';
 import { Button } from '@/ui/primitives/Button';
 import { Input } from '@/ui/primitives/Input';
 import { ListRow } from '@/ui/primitives/ListRow';
@@ -8,17 +8,21 @@ import { Badge } from '@/ui/primitives/Badge';
 import { AddEditItemModal } from '@/features/items/AddEditItemModal';
 import { ItemDetailSheet } from '@/features/items/ItemDetailSheet';
 import { maskAadhaar } from '@/domain/cards/cardHelpers';
+import { generateBurnerPersona, formatAddress } from '@/domain/generator/burnerPersonaGenerator';
+import { webClipboard } from '@/platform/web/WebClipboardPort';
 import { appVaultService } from '@/application/services/AppVaultService';
 import { inMemorySearchIndex } from '@/domain/organization/searchIndex';
 import { useUiStore } from '@/state/uiStore';
-import type { VaultItemEnvelope } from '@/domain/vault/types';
+import type { VaultItemEnvelope, AddressPayload } from '@/domain/vault/types';
 
 export function IdentityScreen() {
   const vaultRevision = useUiStore((state) => state.vaultRevision);
+  const addToast = useUiStore((state) => state.addToast);
   const [items, setItems] = React.useState<VaultItemEnvelope[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [categoryFilter, setCategoryFilter] = React.useState<'all' | 'indian' | 'travel' | 'insurance'>('all');
+  const [categoryFilter, setCategoryFilter] = React.useState<'all' | 'address' | 'indian' | 'travel' | 'insurance'>('all');
   const [filterFavoritesOnly, setFilterFavoritesOnly] = React.useState(false);
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   const [selectedItem, setSelectedItem] = React.useState<VaultItemEnvelope | null>(null);
   const [showDetail, setShowDetail] = React.useState(false);
@@ -29,6 +33,7 @@ export function IdentityScreen() {
     () =>
       new Set([
         'identity',
+        'address',
         'pan',
         'aadhaar',
         'passport',
@@ -51,6 +56,9 @@ export function IdentityScreen() {
         if (filterFavoritesOnly && !i.favorite) return false;
         if (!identityTypes.has(i.type)) return false;
 
+        if (categoryFilter === 'address') {
+          return i.type === 'address' || i.type === 'identity';
+        }
         if (categoryFilter === 'indian') {
           return i.type === 'pan' || i.type === 'aadhaar' || i.type === 'voter_id';
         }
@@ -89,6 +97,33 @@ export function IdentityScreen() {
     setShowAddEdit(true);
   };
 
+  const activeVaultId = useUiStore((state) => state.activeVaultId);
+
+  const handleQuickCreateBurner = async () => {
+    const burner = generateBurnerPersona();
+    const formatted = formatAddress(burner);
+    const now = new Date().toISOString();
+    await appVaultService.saveItem({
+      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      type: 'address',
+      title: burner.title,
+      favorite: false,
+      archived: false,
+      vaultId: activeVaultId !== 'all' ? activeVaultId : 'vault-personal',
+      createdAt: now,
+      updatedAt: now,
+      payload: burner as unknown as Record<string, unknown>,
+      tags: ['burner', 'disposable', 'persona'],
+    });
+    await webClipboard.writeText(formatted);
+    addToast({
+      title: 'Burner Persona Created & Copied',
+      description: `Saved ${burner.fullName} (${burner.city}) and copied address to clipboard!`,
+      variant: 'default',
+    });
+    refreshIdentity();
+  };
+
   return (
     <div className="space-y-6 animate-fade-in w-full">
       {/* Header */}
@@ -96,14 +131,26 @@ export function IdentityScreen() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-text-primary">Personal Data & Identity Documents</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Passports, PAN, Aadhaar, driving licenses, tax IDs, and insurance policies with encrypted storage.
+            Passports, addresses, disposable burner personas, PAN, Aadhaar, driving licenses, and insurance policies.
           </p>
         </div>
 
-        <Button onClick={handleAddNew} className="gap-2 shrink-0">
-          <Plus className="h-4 w-4" />
-          <span>Add Identity</span>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            onClick={handleQuickCreateBurner}
+            className="gap-1.5 text-xs text-accent border-accent/30 hover:bg-accent/10 shadow-xs cursor-pointer h-9"
+            title="Instantly generate and copy a throwaway persona for untrusted sites"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Quick Burner Persona</span>
+          </Button>
+
+          <Button onClick={handleAddNew} className="gap-2 shrink-0 text-xs shadow-xs cursor-pointer h-9">
+            <Plus className="h-4 w-4" />
+            <span>Add Identity / Address</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter Tabs & Search */}
@@ -113,7 +160,7 @@ export function IdentityScreen() {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search identity documents by name or record..."
+            placeholder="Search identities, addresses, or records..."
             className="pl-9 h-10"
           />
         </div>
@@ -125,7 +172,16 @@ export function IdentityScreen() {
             onClick={() => setCategoryFilter('all')}
             className="h-8 text-xs"
           >
-            All Identity
+            All Records
+          </Button>
+          <Button
+            size="sm"
+            variant={categoryFilter === 'address' ? 'default' : 'ghost'}
+            onClick={() => setCategoryFilter('address')}
+            className="h-8 text-xs gap-1.5"
+          >
+            <MapPin className="h-3 w-3" />
+            <span>Addresses & Personas</span>
           </Button>
           <Button
             size="sm"
@@ -188,17 +244,28 @@ export function IdentityScreen() {
         <div className="space-y-2.5">
           {items.map((item) => {
             const payload = item.payload as Record<string, string>;
+            const isAddressItem = item.type === 'address' || Boolean(payload.addressLine1 || (item.type === 'identity' && payload.address));
 
             return (
               <ListRow
                 key={item.id}
-                icon={<UserCheck className="h-5 w-5" />}
+                icon={isAddressItem ? <MapPin className="h-5 w-5 text-accent" /> : <UserCheck className="h-5 w-5" />}
                 title={item.title}
                 subtitle={
                   <span className="flex items-center gap-3 text-xs text-text-secondary">
+                    {isAddressItem && payload.profileType === 'temporary' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/15 text-accent border border-accent/25">
+                        Burner
+                      </span>
+                    )}
                     {payload.fullName && (
                       <span className="font-medium text-text-primary">
                         {payload.fullName}
+                      </span>
+                    )}
+                    {isAddressItem && (payload.addressLine1 || payload.city) && (
+                      <span className="text-text-muted truncate">
+                        {[payload.addressLine1, payload.city, payload.postalCode].filter(Boolean).join(', ')}
                       </span>
                     )}
                     {payload.panNumber && (
@@ -238,6 +305,29 @@ export function IdentityScreen() {
                 }
                 trailing={
                   <div className="flex items-center gap-1.5">
+                    {isAddressItem && (
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const formatted = formatAddress(payload as unknown as AddressPayload);
+                          await webClipboard.writeText(formatted);
+                          setCopiedId(item.id);
+                          addToast({
+                            title: 'Address Copied',
+                            description: `Copied address for "${item.title}" to clipboard.`,
+                            variant: 'default',
+                          });
+                          setTimeout(() => setCopiedId((c) => (c === item.id ? null : c)), 2000);
+                        }}
+                        className="p-1.5 rounded-lg text-text-muted hover:text-accent hover:bg-surface-subtle transition-colors cursor-pointer"
+                        title="Copy formatted address"
+                        aria-label="Copy formatted address"
+                      >
+                        {copiedId === item.id ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={async (e) => {

@@ -46,6 +46,7 @@ export type VaultItemType =
   | 'upi_pin'
   | 'atm_pin'
   | 'identity'
+  | 'address'
   | 'pan'
   | 'aadhaar'
   | 'passport'
@@ -180,6 +181,23 @@ export interface IdentityPayload {
   readonly nationality?: string;
   readonly bloodGroup?: string;
   readonly address?: string;
+  readonly notes?: string;
+}
+
+export interface AddressPayload {
+  readonly profileType?: 'real' | 'temporary';
+  readonly fullName?: string;
+  readonly title?: string;
+  readonly company?: string;
+  readonly addressLine1?: string;
+  readonly addressLine2?: string;
+  readonly city?: string;
+  readonly state?: string;
+  readonly postalCode?: string;
+  readonly country?: string;
+  readonly phone?: string;
+  readonly email?: string;
+  readonly purpose?: string;
   readonly notes?: string;
 }
 

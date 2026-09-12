@@ -23,7 +23,6 @@ import { CommandPalette } from '@/ui/navigation/CommandPalette';
 import { MobileBottomNav } from '@/ui/layout/MobileBottomNav';
 import { VaultSwitcher } from '@/ui/navigation/VaultSwitcher';
 import { ThemeSelector } from '@/ui/navigation/ThemeSelector';
-import { BuyMeACoffeeButton } from '@/ui/primitives/BuyMeACoffeeButton';
 import { ImportExternalModal } from '@/features/migration/ImportExternalModal';
 import { KeyboardShortcutsModal } from '@/features/shortcuts/KeyboardShortcutsModal';
 import { getShortcuts, matchesShortcut } from '@/domain/shortcuts/shortcutEngine';
@@ -137,7 +136,7 @@ export function AppShell({ children }: AppShellProps) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-ink/60 hover:text-ink hover:bg-moss"
+            className="lg:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-ink/60 hover:text-ink hover:bg-moss"
             aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -162,7 +161,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
 
         {/* Search Command Palette Trigger */}
-        <div className="hidden md:flex items-center flex-1 max-w-md mx-8">
+        <div className="hidden lg:flex items-center flex-1 max-w-md mx-8">
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(true)}
@@ -222,11 +221,11 @@ export function AppShell({ children }: AppShellProps) {
       </header>
 
       {/* Main Body */}
-      <div className="flex flex-1 overflow-hidden relative pb-16 md:pb-0">
+      <div className="flex flex-1 overflow-hidden relative pb-16 lg:pb-0">
         {/* Desktop Sidebar Navigation */}
         <aside
           className={cn(
-            'fixed md:static inset-y-14 left-0 z-30 flex w-64 flex-col justify-between border-r border-line bg-card/85 p-3 transition-transform md:translate-x-0 backdrop-blur-md',
+            'fixed lg:static inset-y-14 left-0 z-30 flex w-64 flex-col justify-between border-r border-line bg-card/85 p-3 transition-transform lg:translate-x-0 backdrop-blur-md',
             mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
           )}
         >
@@ -274,23 +273,20 @@ export function AppShell({ children }: AppShellProps) {
                 </span>
               </div>
             </div>
-            <div className="pt-1">
-              <BuyMeACoffeeButton size="sm" className="w-full" />
-            </div>
           </div>
         </aside>
 
         {/* Mobile menu backdrop */}
         {mobileMenuOpen && (
           <div
-            className="fixed inset-0 z-20 bg-ink/30 backdrop-blur-xs md:hidden"
+            className="fixed inset-0 z-20 bg-ink/30 backdrop-blur-xs lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
         {/* Content View Area */}
         <main className="flex-1 overflow-y-auto page-bg focus:outline-none custom-scrollbar">
-          <div className="w-full px-4 sm:px-8 py-6 h-full flex flex-col">
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-8 py-6 h-full flex flex-col">
             {children || <Outlet />}
           </div>
         </main>

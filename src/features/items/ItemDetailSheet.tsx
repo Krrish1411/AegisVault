@@ -23,12 +23,14 @@ import {
   Download,
   Upload,
   X,
+  MapPin,
 } from 'lucide-react';
 import { Sheet } from '@/ui/primitives/Sheet';
 import { Button } from '@/ui/primitives/Button';
 import { Badge } from '@/ui/primitives/Badge';
 import { Dialog } from '@/ui/primitives/Dialog';
 import { maskCardNumber, maskAadhaar, detectCardIssuer } from '@/domain/cards/cardHelpers';
+import { formatAddress } from '@/domain/generator/burnerPersonaGenerator';
 import { TotpCardDisplay } from './TotpCardDisplay';
 import type {
   VaultItemEnvelope,
@@ -36,6 +38,7 @@ import type {
   MpinHistoryEntry,
   AttachmentMetadata,
   DocumentPayload,
+  AddressPayload,
 } from '@/domain/vault/types';
 import { appVaultService } from '@/application/services/AppVaultService';
 import { webClipboard } from '@/platform/web/WebClipboardPort';
@@ -991,6 +994,102 @@ export function ItemDetailSheet({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Address & Personal Persona Card */}
+          {(item.type === 'address' || (item.type === 'identity' && (payload.addressLine1 || payload.address || payload.city))) && (
+            <div className="p-4 rounded-xl border border-border bg-surface-subtle space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-accent" />
+                  <span className="text-xs font-semibold uppercase text-text-muted">
+                    {payload.profileType === 'temporary' ? 'Burner / Disposable Persona' : 'Official / Real Profile'}
+                  </span>
+                </div>
+                <Badge variant={payload.profileType === 'temporary' ? 'accent' : 'success'}>
+                  {payload.profileType === 'temporary' ? 'Disposable Burner' : 'Official Identity'}
+                </Badge>
+              </div>
+
+              {/* Quick Copy Full Address Button */}
+              <div className="p-3 rounded-lg border border-line bg-card flex items-start justify-between gap-3 shadow-xs">
+                <div className="space-y-0.5 text-xs">
+                  {payload.fullName && <div className="font-bold text-ink">{payload.fullName}</div>}
+                  {payload.company && <div className="text-ink/65">{payload.company}</div>}
+                  {payload.addressLine1 && <div className="text-ink/90">{payload.addressLine1}</div>}
+                  {payload.addressLine2 && <div className="text-ink/75">{payload.addressLine2}</div>}
+                  {(payload.city || payload.state || payload.postalCode) && (
+                    <div className="text-ink/90">
+                      {[payload.city, payload.state, payload.postalCode].filter(Boolean).join(', ')}
+                    </div>
+                  )}
+                  {payload.country && <div className="text-ink/70">{payload.country}</div>}
+                  {payload.address && !payload.addressLine1 && <div className="text-ink/90">{payload.address}</div>}
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const formatted = formatAddress(payload as unknown as AddressPayload);
+                    copyToClipboard('Full Formatted Address', formatted, 'fullAddress');
+                  }}
+                  className="gap-1.5 text-xs shrink-0 cursor-pointer h-8"
+                  title="Copy full multiline address"
+                >
+                  {copiedKey === 'fullAddress' ? (
+                    <Check className="h-3.5 w-3.5 text-success" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  <span>Copy Address</span>
+                </Button>
+              </div>
+
+              {/* Individual Details Rows */}
+              <div className="space-y-2 pt-1">
+                {payload.phone && (
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-border/50">
+                    <div>
+                      <span className="text-[10px] text-text-muted uppercase block">Phone / Mobile</span>
+                      <span className="font-mono font-medium text-text-primary">{payload.phone}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('Phone Number', payload.phone || '', 'phone')}
+                      className="p-1 text-text-muted hover:text-text-primary rounded hover:bg-surface"
+                      title="Copy phone"
+                    >
+                      {copiedKey === 'phone' ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                )}
+
+                {payload.email && (
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-border/50">
+                    <div>
+                      <span className="text-[10px] text-text-muted uppercase block">Email / Alias</span>
+                      <span className="font-medium text-accent">{payload.email}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('Email Alias', payload.email || '', 'email')}
+                      className="p-1 text-text-muted hover:text-text-primary rounded hover:bg-surface"
+                      title="Copy email"
+                    >
+                      {copiedKey === 'email' ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                )}
+
+                {payload.purpose && (
+                  <div className="text-xs py-1 text-text-secondary">
+                    <span className="text-[10px] text-text-muted uppercase block">Intended Purpose</span>
+                    <span>{payload.purpose}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

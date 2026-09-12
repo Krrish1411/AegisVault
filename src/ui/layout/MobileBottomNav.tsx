@@ -14,7 +14,7 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-line bg-card/95 backdrop-blur-md px-2 safe-area-bottom shadow-lg select-none"
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-line bg-card/95 backdrop-blur-md px-2 safe-area-bottom shadow-lg select-none"
     >
       {tabs.map((tab) => {
         const IconComponent = tab.icon;
@@ -24,7 +24,7 @@ export function MobileBottomNav() {
             to={tab.to}
             className={({ isActive }) =>
               cn(
-                'flex flex-col items-center justify-center min-w-[56px] min-h-[44px] px-2 py-1 rounded-xl text-[10px] font-medium transition-all active:scale-95',
+                'flex flex-col items-center justify-center min-w-[64px] min-h-[44px] px-3 py-1 rounded-xl text-[11px] font-medium transition-all active:scale-95 touch-manipulation',
                 isActive
                   ? 'text-pine-700 dark:text-pine-300 font-bold bg-pine-50/90 dark:bg-pine-950/60 border border-pine-200/60 dark:border-pine-800/60 shadow-xs'
                   : 'text-ink/60 hover:text-ink'

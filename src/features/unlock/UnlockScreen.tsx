@@ -20,7 +20,6 @@ import { appVaultService } from '@/application/services/AppVaultService';
 import { useSessionStore } from '@/state/sessionStore';
 import { useUiStore } from '@/state/uiStore';
 import { AuthenticationFailedError, VaultNotFoundError } from '@/lib/errors/VaultError';
-import { BuyMeACoffeeButton } from '@/ui/primitives/BuyMeACoffeeButton';
 
 export function UnlockScreen() {
   const navigate = useNavigate();
@@ -233,14 +232,11 @@ export function UnlockScreen() {
                   <span>New to AegisVault? Explore Features & App Guide</span>
                 </button>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-xs text-ink/65">
-                    <span>Crafted with precision by</span>
-                    <span className="font-extrabold tracking-wide text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/25 shadow-xs">
-                      Krish Patel
-                    </span>
-                  </div>
-                  <BuyMeACoffeeButton size="sm" />
+                <div className="flex items-center gap-1.5 text-xs text-ink/65">
+                  <span>Crafted with precision by</span>
+                  <span className="font-extrabold tracking-wide text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/25 shadow-xs">
+                    Krish Patel
+                  </span>
                 </div>
               </div>
             </div>

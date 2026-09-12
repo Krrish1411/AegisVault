@@ -233,7 +233,7 @@ export function WelcomeScreen() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <BuyMeACoffeeButton size="sm" className="hidden sm:inline-flex" />
+          <BuyMeACoffeeButton size="sm" />
 
           <ThemeSelector />
 
@@ -278,7 +278,6 @@ export function WelcomeScreen() {
                   Krish Patel
                 </span>
               </div>
-              <BuyMeACoffeeButton size="sm" className="sm:hidden" />
             </div>
 
             <h1 className="text-3xl sm:text-5xl lg:text-6xl font-display font-extrabold tracking-tight text-ink leading-tight">
@@ -313,8 +312,6 @@ export function WelcomeScreen() {
                   <span>Already Have a Vault? Unlock Here</span>
                 </Button>
               )}
-
-              <BuyMeACoffeeButton size="lg" className="w-full sm:w-auto" />
             </div>
 
             {/* Trust Badges */}
@@ -572,7 +569,6 @@ export function WelcomeScreen() {
                   <span>Go to Unlock</span>
                 </Button>
               )}
-              <BuyMeACoffeeButton size="lg" className="w-full sm:w-auto" />
             </div>
 
             {/* Highlighted Creator Line */}
@@ -605,8 +601,6 @@ export function WelcomeScreen() {
           </div>
 
           <div className="flex items-center gap-4 text-xs text-ink/60">
-            <BuyMeACoffeeButton size="sm" />
-            <span>•</span>
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
