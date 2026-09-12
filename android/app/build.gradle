@@ -22,7 +22,14 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('aegisvault-release.keystore')
+            def ksFile = file('aegisvault-release.keystore')
+            if (!ksFile.exists()) {
+                ksFile = rootProject.file('app/aegisvault-release.keystore')
+            }
+            if (!ksFile.exists()) {
+                ksFile = rootProject.file('aegisvault-release.keystore')
+            }
+            storeFile ksFile
             storePassword 'aegisvault2026'
             keyAlias 'aegisvault'
             keyPassword 'aegisvault2026'

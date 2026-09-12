@@ -73,8 +73,9 @@ jobs:
       - name: Verify Signing Keystore
         run: |
           cd android/app
-          if ! keytool -list -keystore aegisvault-release.keystore -storepass aegisvault2026 -alias aegisvault > /dev/null 2>&1; then
-            echo "⚠️ Generating standard PKCS12 release keystore via keytool..."
+          # Check if existing keystore contains a valid PrivateKeyEntry with alias 'aegisvault'
+          if ! keytool -list -v -keystore aegisvault-release.keystore -storepass aegisvault2026 -alias aegisvault 2>&1 | grep -q "PrivateKeyEntry"; then
+            echo "⚠️ Generating standard PKCS12 release keystore via Java keytool..."
             rm -f aegisvault-release.keystore
             keytool -genkeypair -v \
               -keystore aegisvault-release.keystore \
@@ -87,7 +88,9 @@ jobs:
               -keypass aegisvault2026 \
               -dname "CN=AegisVault, O=AegisVault, C=US"
           fi
-          echo "✅ Keystore verified successfully"
+          # Also ensure keystore is copied to android/ root directory as fallback
+          cp aegisvault-release.keystore ../aegisvault-release.keystore
+          echo "✅ Keystore verified and synchronized successfully"
 
       - name: Cache Gradle Caches
         uses: actions/cache@v4
@@ -106,13 +109,17 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'all' || inputs.build_type == 'debug-only' }}
         run: |
           cd android
+          set +e
           ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee debug_build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
             echo "### ❌ Debug Build Failed" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -A 30 "\* What went wrong:" debug_build.log >> $GITHUB_STEP_SUMMARY || tail -n 40 debug_build.log >> $GITHUB_STEP_SUMMARY
+            tail -n 60 debug_build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            ERR_MSG=$(grep -A 3 "\* What went wrong:" debug_build.log | tail -n +2 | tr '\n' ' ')
+            [ -z "$ERR_MSG" ] && ERR_MSG=$(tail -n 5 debug_build.log | tr '\n' ' ')
+            echo "::error title=Debug Build Failure::$ERR_MSG"
             exit $STATUS
           fi
 
@@ -120,13 +127,17 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'all' || inputs.build_type == 'release-only' }}
         run: |
           cd android
+          set +e
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee release_build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
             echo "### ❌ Release Build Failed" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -A 30 "\* What went wrong:" release_build.log >> $GITHUB_STEP_SUMMARY || tail -n 40 release_build.log >> $GITHUB_STEP_SUMMARY
+            tail -n 60 release_build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+            ERR_MSG=$(grep -A 3 "\* What went wrong:" release_build.log | tail -n +2 | tr '\n' ' ')
+            [ -z "$ERR_MSG" ] && ERR_MSG=$(tail -n 5 release_build.log | tr '\n' ' ')
+            echo "::error title=Release Build Failure::$ERR_MSG"
             exit $STATUS
           fi
 
@@ -144,15 +155,28 @@ jobs:
             cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-artifacts/AegisVault-Release-unsigned.apk
             echo "✅ Release (unsigned) APK collected"
           fi
+          if [ -f "android/app/aegisvault-release.keystore" ]; then
+            cp android/app/aegisvault-release.keystore build-artifacts/aegisvault-release.keystore
+            echo "✅ Release Keystore collected"
+          fi
           echo "--- Build artifacts ---"
           ls -lh build-artifacts/
 
-      - name: Upload Android APK Artifacts
+      - name: Upload Android APK & Keystore Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AegisVault-Android-APKs-${{ github.run_number }}
           path: build-artifacts/*
           retention-days: 30
+
+      - name: Upload Build Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-failure-logs-${{ github.run_number }}
+          path: |
+            android/*.log
+            android/app/build/reports
 
       - name: Create GitHub Release (on tag push)
         if: startsWith(github.ref, 'refs/tags/v')
