@@ -18,7 +18,7 @@ import type {
 import { createEmergencyGrantPackage } from '@/domain/emergency/emergencyAccessEngine';
 import { DEFAULT_VAULT_SETTINGS } from '@/domain/vault/types';
 import type { VaultRepository, EncryptedAttachmentRecord } from '@/storage/ports/VaultRepository';
-import { dexieVaultRepository } from '@/storage/indexeddb/DexieVaultRepository';
+import { sqliteVaultRepository, SqliteVaultRepository } from '@/storage/sqlite/SqliteVaultRepository';
 import {
   createEncryptedVault,
   unlockEncryptedVault,
@@ -35,6 +35,13 @@ import {
   clearQuickPin,
   getQuickPinRemainingAttempts,
 } from '@/security/crypto/deviceAuth';
+import {
+  setupBiometricUnlock,
+  unlockWithBiometric,
+  hasBiometricUnlock,
+  clearBiometricUnlock,
+  isBiometricSupportedOnDevice,
+} from '@/security/crypto/biometricAuth';
 import { exportEncryptedVault, importEncryptedVault } from '@/security/export/vaultExport';
 import { FORMAT_VERSION, CRYPTO_PROFILE } from '@/security/serialization/vaultSerializer';
 import { inMemorySearchIndex } from '@/domain/organization/searchIndex';
@@ -63,11 +70,17 @@ export class AppVaultService implements VaultService {
   private listeners = new Set<() => void>();
 
   constructor(
-    repository: VaultRepository = dexieVaultRepository,
+    repository: VaultRepository = sqliteVaultRepository,
     cryptoProvider: SodiumCryptoProvider = new SodiumCryptoProvider()
   ) {
     this.repository = repository;
     this.cryptoProvider = cryptoProvider;
+  }
+
+  private async syncNativeAutofillIndex(domain: DecryptedVaultDomain): Promise<void> {
+    if ('syncAutofillIndex' in this.repository && typeof (this.repository as SqliteVaultRepository).syncAutofillIndex === 'function') {
+      await (this.repository as SqliteVaultRepository).syncAutofillIndex(domain);
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -187,6 +200,7 @@ export class AppVaultService implements VaultService {
 
     useSessionStore.getState().unlock(domain.metadata.name);
     this.notify();
+    await this.syncNativeAutofillIndex(domain);
     logger.info('Vault unlocked successfully', { component: 'AppVaultService', vaultId: domain.metadata.id });
   }
 
@@ -247,6 +261,66 @@ export class AppVaultService implements VaultService {
 
   getQuickPinRemainingAttempts(): number {
     return getQuickPinRemainingAttempts();
+  }
+
+  async unlockWithBiometric(): Promise<void> {
+    const container = await this.repository.read();
+    if (!container) {
+      throw new VaultNotFoundError('No vault found on this device');
+    }
+
+    const vaultKey = await unlockWithBiometric();
+
+    // Decrypt domain payload using unwrapped vaultKey in < 20ms
+    await this.cryptoProvider.init();
+    const nonce = this.cryptoProvider.fromBase64(container.payload.nonce);
+    const ciphertext = this.cryptoProvider.fromBase64(container.payload.ciphertext);
+
+    let decryptedBytes: Uint8Array;
+    try {
+      decryptedBytes = this.cryptoProvider.aeadDecrypt({
+        ciphertext,
+        nonce,
+        key: vaultKey,
+      });
+    } catch (err) {
+      this.cryptoProvider.memzero(vaultKey);
+      throw new VaultCorruptedError('Failed to decrypt vault payload with biometric key', err);
+    }
+
+    const domainJson = this.cryptoProvider.toString(decryptedBytes);
+    this.cryptoProvider.memzero(decryptedBytes);
+
+    const { validateDecryptedVault } = await import('@/security/serialization/vaultSerializer');
+    const domain = validateDecryptedVault(domainJson);
+
+    this.inMemoryDomain = domain;
+    this.inMemoryVaultKey = vaultKey;
+    inMemorySearchIndex.buildIndex(domain);
+
+    useSessionStore.getState().unlock(domain.metadata.name);
+    this.notify();
+    await this.syncNativeAutofillIndex(domain);
+    logger.info('Vault unlocked via Pure Biometrics', { component: 'AppVaultService', vaultId: domain.metadata.id });
+  }
+
+  async setupBiometricUnlock(): Promise<void> {
+    const { vaultKey } = this.ensureUnlocked();
+    await setupBiometricUnlock(vaultKey);
+    logger.info('Pure Biometric Unlock configured for hardware-backed access', { component: 'AppVaultService' });
+  }
+
+  hasBiometricUnlock(): boolean {
+    return hasBiometricUnlock();
+  }
+
+  clearBiometricUnlock(): void {
+    clearBiometricUnlock();
+    logger.info('Biometric unlock disabled and cleared from device', { component: 'AppVaultService' });
+  }
+
+  async isBiometricSupported(): Promise<boolean> {
+    return await isBiometricSupportedOnDevice();
   }
 
   async lockVault(): Promise<void> {
@@ -509,6 +583,7 @@ export class AppVaultService implements VaultService {
     this.inMemoryDomain = nextDomain;
     inMemorySearchIndex.buildIndex(nextDomain);
     this.notify();
+    await this.syncNativeAutofillIndex(nextDomain);
 
     logger.info(`Vault item saved (${item.type})`, { component: 'AppVaultService', itemId: item.id });
   }

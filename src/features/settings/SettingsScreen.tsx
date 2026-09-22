@@ -28,7 +28,10 @@ import {
   Edit3,
   Compass,
   ArrowRight,
+  Fingerprint,
+  ExternalLink,
 } from 'lucide-react';
+import { aegisBiometricClient } from '@/lib/native/biometrics';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/ui/primitives/Card';
 import { Button } from '@/ui/primitives/Button';
@@ -36,7 +39,6 @@ import { Badge } from '@/ui/primitives/Badge';
 import { Input } from '@/ui/primitives/Input';
 import { Dialog } from '@/ui/primitives/Dialog';
 import { ChangePasswordModal } from '@/features/recovery/ChangePasswordModal';
-import { QuickPinModal } from '@/features/security/QuickPinModal';
 import { ExportBackupModal } from '@/features/backup/ExportBackupModal';
 import { ImportBackupModal } from '@/features/backup/ImportBackupModal';
 import { ExportShareModal } from '@/features/sharing/ExportShareModal';
@@ -75,10 +77,66 @@ export function SettingsScreen() {
   const clipboardClearSeconds = useSessionStore((state) => state.clipboardClearSeconds);
   const setClipboardClearSeconds = useSessionStore((state) => state.setClipboardClearSeconds);
 
+  // Biometric & Autofill state
+  const [hasBiometric, setHasBiometric] = React.useState(() => appVaultService.hasBiometricUnlock());
+  const [biometricSupported, setBiometricSupported] = React.useState(false);
+  const [autofillEnabled, setAutofillEnabled] = React.useState(false);
+  const [autofillSupported, setAutofillSupported] = React.useState(false);
+
+  React.useEffect(() => {
+    appVaultService.isBiometricSupported().then(setBiometricSupported);
+    aegisBiometricClient.checkAutofillStatus().then((res) => {
+      setAutofillSupported(res.supported);
+      setAutofillEnabled(res.enabled);
+    });
+  }, []);
+
+  const handleToggleBiometric = async () => {
+    if (hasBiometric) {
+      appVaultService.clearBiometricUnlock();
+      setHasBiometric(false);
+      addToast({
+        title: 'Biometric Unlock Disabled',
+        description: 'Biometric unlock credentials removed from this device.',
+        variant: 'default',
+      });
+    } else {
+      try {
+        await appVaultService.setupBiometricUnlock();
+        setHasBiometric(true);
+        addToast({
+          title: 'Biometric Unlock Enabled',
+          description: 'Instant hardware unlock (Fingerprint / Face ID) active.',
+          variant: 'success',
+        });
+      } catch (e) {
+        addToast({
+          title: 'Biometric Setup Failed',
+          description: e instanceof Error ? e.message : 'Could not activate biometric unlock',
+          variant: 'danger',
+        });
+      }
+    }
+  };
+
+  const handleOpenAutofillSettings = async () => {
+    try {
+      await aegisBiometricClient.openAutofillSettings();
+      setTimeout(async () => {
+        const res = await aegisBiometricClient.checkAutofillStatus();
+        setAutofillEnabled(res.enabled);
+      }, 1000);
+    } catch (e) {
+      addToast({
+        title: 'Settings Error',
+        description: e instanceof Error ? e.message : 'Failed to open settings',
+        variant: 'danger',
+      });
+    }
+  };
+
   // Modals state
   const [showChangePasswordModal, setShowChangePasswordModal] = React.useState(false);
-  const [showQuickPinModal, setShowQuickPinModal] = React.useState(false);
-  const [hasQuickPin, setHasQuickPin] = React.useState(() => appVaultService.hasQuickPin());
   const [showExportModal, setShowExportModal] = React.useState(false);
   const [showImportModal, setShowImportModal] = React.useState(false);
   const [showExportShareModal, setShowExportShareModal] = React.useState(false);
@@ -199,21 +257,58 @@ export function SettingsScreen() {
                 </div>
               </div>
 
-              {/* Quick Device PIN Unlock (<0.05s) */}
+              {/* Pure Biometric Unlock (Fingerprint / Face ID) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-border bg-surface-subtle">
+                <div className="flex items-center gap-3">
+                  <Fingerprint className="h-5 w-5 text-accent shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-text-primary">Pure Biometric Unlock (Fingerprint / Face ID)</p>
+                      <Badge variant={hasBiometric ? 'success' : 'secondary'} className="text-[10px] px-1.5 py-0.5">
+                        {hasBiometric ? 'Active' : 'Disabled'}
+                      </Badge>
+                      <span className="text-[10px] text-accent font-medium">
+                        {biometricSupported ? '• Hardware Ready' : ''}
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-secondary">
+                      {hasBiometric
+                        ? 'Hardware-grade biometric unlock active (BIOMETRIC_STRONG). Zero PINs needed.'
+                        : 'Unlock vault with fingerprint or 3D face recognition instead of typing full master password'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={hasBiometric ? 'outline' : 'default'}
+                    onClick={handleToggleBiometric}
+                    className="text-xs shrink-0"
+                  >
+                    {hasBiometric ? 'Disable Biometrics' : 'Enable Biometrics'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Android System-Wide Autofill Service */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-border bg-surface-subtle">
                 <div className="flex items-center gap-3">
                   <Shield className="h-5 w-5 text-accent shrink-0" />
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold text-text-primary">Quick Device PIN Unlock (&lt;0.05s)</p>
-                      <Badge variant={hasQuickPin ? 'success' : 'secondary'} className="text-[10px] px-1.5 py-0.5">
-                        {hasQuickPin ? 'Active' : 'Disabled'}
+                      <p className="text-xs font-semibold text-text-primary">System-Wide Android Autofill</p>
+                      <Badge variant={autofillEnabled ? 'success' : 'secondary'} className="text-[10px] px-1.5 py-0.5">
+                        {autofillEnabled ? 'Active' : 'Not Configured'}
                       </Badge>
+                      <span className="text-[10px] text-accent font-medium">
+                        {autofillSupported ? '• Engine Ready' : ''}
+                      </span>
                     </div>
                     <p className="text-xs text-text-secondary">
-                      {hasQuickPin
-                        ? 'Hardware-grade PBKDF2 wrapping with instant unlock (<0.05s) and 3-strike lockout'
-                        : 'Unlock vault with short 4-12 digit PIN instead of typing full master password'}
+                      {autofillEnabled
+                        ? 'AegisVault is your primary system autofill provider. Credentials fill in <5ms across apps and browsers.'
+                        : 'Autofill logins across Chrome, Edge, Firefox, and native Android apps directly from local SQLite database'}
                     </p>
                   </div>
                 </div>
@@ -222,10 +317,11 @@ export function SettingsScreen() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setShowQuickPinModal(true)}
-                    className="text-xs shrink-0"
+                    onClick={handleOpenAutofillSettings}
+                    className="text-xs shrink-0 gap-1.5"
                   >
-                    {hasQuickPin ? 'Manage PIN' : 'Enable Quick PIN'}
+                    <span>Configure Autofill</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
@@ -1080,13 +1176,6 @@ export function SettingsScreen() {
       <ChangePasswordModal
         open={showChangePasswordModal}
         onOpenChange={setShowChangePasswordModal}
-      />
-
-      {/* Quick Device PIN Dialog */}
-      <QuickPinModal
-        open={showQuickPinModal}
-        onOpenChange={setShowQuickPinModal}
-        onPinChanged={() => setHasQuickPin(appVaultService.hasQuickPin())}
       />
 
       {/* Export Backup Dialog */}

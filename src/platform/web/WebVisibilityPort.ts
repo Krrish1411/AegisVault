@@ -13,9 +13,20 @@ export class WebVisibilityPort implements VisibilityPort {
       listener(document.visibilityState === 'visible');
     };
 
+    const systemLockHandler = () => {
+      listener(false);
+    };
+
     document.addEventListener('visibilitychange', handler);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('aegis_system_lock', systemLockHandler);
+    }
+
     return () => {
       document.removeEventListener('visibilitychange', handler);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('aegis_system_lock', systemLockHandler);
+      }
     };
   }
 }

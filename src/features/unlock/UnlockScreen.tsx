@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   Plus,
   KeyRound,
+  Fingerprint,
 } from 'lucide-react';
 import { Button } from '@/ui/primitives/Button';
 import { SecretInput } from '@/ui/primitives/SecretInput';
@@ -27,6 +28,7 @@ export function UnlockScreen() {
   const [password, setPassword] = React.useState('');
   const [pin, setPin] = React.useState('');
   const [hasQuickPin, setHasQuickPin] = React.useState(false);
+  const [hasBiometric, setHasBiometric] = React.useState(false);
   const [unlockMode, setUnlockMode] = React.useState<'pin' | 'password'>('password');
   const [pinAttemptsLeft, setPinAttemptsLeft] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | undefined>(undefined);
@@ -39,6 +41,27 @@ export function UnlockScreen() {
   const vaultName = useSessionStore((state) => state.vaultName) ?? 'Personal Vault';
   const addToast = useUiStore((state) => state.addToast);
 
+  const triggerBiometricUnlock = React.useCallback(async () => {
+    setIsUnlocking(true);
+    setError(undefined);
+    try {
+      await appVaultService.unlockWithBiometric();
+      addToast({
+        title: 'Vault Decrypted',
+        description: 'Biometric identity verified. Session active.',
+        variant: 'success',
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('password')) {
+        setError(msg);
+      }
+    } finally {
+      setIsUnlocking(false);
+    }
+  }, [addToast, navigate]);
+
   // If already unlocked, redirect to dashboard
   const status = useSessionStore((state) => state.status);
   React.useEffect(() => {
@@ -47,19 +70,26 @@ export function UnlockScreen() {
     }
   }, [status, navigate]);
 
-  // Check if vault exists in storage and if Quick PIN is configured
+  // Check if vault exists in storage, if biometrics or Quick PIN is configured
   React.useEffect(() => {
-    appVaultService.isVaultCreated().then((exists) => {
+    appVaultService.isVaultCreated().then(async (exists) => {
       setHasVault(exists);
       if (exists) {
-        const pinConfigured = appVaultService.hasQuickPin();
-        setHasQuickPin(pinConfigured);
-        if (pinConfigured) {
-          setUnlockMode('pin');
+        const bioConfigured = appVaultService.hasBiometricUnlock();
+        setHasBiometric(bioConfigured);
+
+        if (bioConfigured) {
+          triggerBiometricUnlock();
+        } else {
+          const pinConfigured = appVaultService.hasQuickPin();
+          setHasQuickPin(pinConfigured);
+          if (pinConfigured) {
+            setUnlockMode('pin');
+          }
         }
       }
     });
-  }, []);
+  }, [triggerBiometricUnlock]);
 
   const handlePasswordUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,6 +309,19 @@ export function UnlockScreen() {
                       />
                       {error && <p className="text-xs text-danger font-medium">{error}</p>}
                     </div>
+
+                    {hasBiometric && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={triggerBiometricUnlock}
+                        disabled={isUnlocking}
+                        className="w-full gap-2 border-accent/40 text-accent hover:bg-accent/10 active:scale-95 text-xs font-semibold py-2.5 mb-2"
+                      >
+                        <Fingerprint className="h-4 w-4" />
+                        <span>Unlock with Fingerprint or Face ID</span>
+                      </Button>
+                    )}
 
                     <Button
                       type="submit"
