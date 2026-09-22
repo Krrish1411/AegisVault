@@ -14,7 +14,6 @@ import {
   Sun,
   Moon,
   ArrowRight,
-  Mail,
 } from 'lucide-react';
 import { appVaultService } from '@/application/services/AppVaultService';
 import { useUiStore } from '@/state/uiStore';
@@ -62,7 +61,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     const q = query.toLowerCase().trim();
     const cmds = [
       { id: 'nav-passwords', title: 'Go to Passwords & Logins', icon: Key, action: () => navigate('/passwords') },
-      { id: 'nav-aliases', title: 'Go to Email Aliases & Disguises (@duck.com)', icon: Mail, action: () => navigate('/aliases') },
       { id: 'nav-cards', title: 'Go to Cards & Payment Methods', icon: CreditCard, action: () => navigate('/cards') },
       { id: 'nav-banking', title: 'Go to Bank Accounts & UPI', icon: Landmark, action: () => navigate('/banking') },
       { id: 'nav-identity', title: 'Go to Identities & Gov IDs', icon: UserCheck, action: () => navigate('/identity') },

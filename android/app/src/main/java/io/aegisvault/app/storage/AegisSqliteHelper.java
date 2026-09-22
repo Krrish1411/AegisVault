@@ -19,7 +19,6 @@ public class AegisSqliteHelper extends SQLiteOpenHelper {
 
     private static final String TAG = "AegisSqliteHelper";
     public static final String DATABASE_NAME = "aegisvault.db";
-    private static final int DATABASE_VERSION = 1;
 
     // Table: vault_metadata
     public static final String TABLE_VAULT = "vault_metadata";
@@ -47,6 +46,17 @@ public class AegisSqliteHelper extends SQLiteOpenHelper {
     public static final String COL_AUTO_ENCRYPTED_SECRET = "encrypted_secret";
     public static final String COL_AUTO_UPDATED_AT = "updated_at";
 
+    // Table: captured_credentials (captured by AutofillService on website form submission)
+    public static final String TABLE_CAPTURED = "captured_credentials";
+    public static final String COL_CAP_ID = "id";
+    public static final String COL_CAP_DOMAIN = "domain";
+    public static final String COL_CAP_PACKAGE = "package_id";
+    public static final String COL_CAP_TITLE = "title";
+    public static final String COL_CAP_USERNAME = "username";
+    public static final String COL_CAP_PASSWORD = "password";
+    public static final String COL_CAP_CREATED_AT = "created_at";
+
+    private static final int DATABASE_VERSION = 2;
     private static AegisSqliteHelper sInstance;
 
     public static synchronized AegisSqliteHelper getInstance(Context context) {
@@ -90,6 +100,16 @@ public class AegisSqliteHelper extends SQLiteOpenHelper {
                 COL_AUTO_UPDATED_AT + " INTEGER NOT NULL" +
                 ");");
 
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_CAPTURED + " (" +
+                COL_CAP_ID + " TEXT PRIMARY KEY, " +
+                COL_CAP_DOMAIN + " TEXT, " +
+                COL_CAP_PACKAGE + " TEXT, " +
+                COL_CAP_TITLE + " TEXT NOT NULL, " +
+                COL_CAP_USERNAME + " TEXT, " +
+                COL_CAP_PASSWORD + " TEXT, " +
+                COL_CAP_CREATED_AT + " INTEGER NOT NULL" +
+                ");");
+
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_autofill_domain ON " + TABLE_AUTOFILL + " (" + COL_AUTO_DOMAIN + ");");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_autofill_pkg ON " + TABLE_AUTOFILL + " (" + COL_AUTO_PACKAGE + ");");
     }
@@ -97,6 +117,17 @@ public class AegisSqliteHelper extends SQLiteOpenHelper {
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         Log.i(TAG, "Upgrading database from " + oldVersion + " to " + newVersion);
+        if (oldVersion < 2) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_CAPTURED + " (" +
+                    COL_CAP_ID + " TEXT PRIMARY KEY, " +
+                    COL_CAP_DOMAIN + " TEXT, " +
+                    COL_CAP_PACKAGE + " TEXT, " +
+                    COL_CAP_TITLE + " TEXT NOT NULL, " +
+                    COL_CAP_USERNAME + " TEXT, " +
+                    COL_CAP_PASSWORD + " TEXT, " +
+                    COL_CAP_CREATED_AT + " INTEGER NOT NULL" +
+                    ");");
+        }
     }
 
     // Vault Container Operations
@@ -136,6 +167,7 @@ public class AegisSqliteHelper extends SQLiteOpenHelper {
             db.delete(TABLE_VAULT, null, null);
             db.delete(TABLE_ATTACHMENTS, null, null);
             db.delete(TABLE_AUTOFILL, null, null);
+            db.delete(TABLE_CAPTURED, null, null);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -209,5 +241,54 @@ public class AegisSqliteHelper extends SQLiteOpenHelper {
                     new String[]{"%" + domain + "%"}, null, null, null);
         }
         return null;
+    }
+
+    // Captured Credential Operations (Form Submission & Save Pop-Up)
+    public void saveCapturedCredential(String domain, String packageId, String title, String username, String password) {
+        if ((username == null || username.trim().isEmpty()) && (password == null || password.trim().isEmpty())) {
+            return;
+        }
+        SQLiteDatabase db = getWritableDatabase();
+        long now = System.currentTimeMillis();
+        String id = "cap-" + now + "-" + (int)(Math.random() * 10000);
+
+        // 1. Insert into captured_credentials table for in-app review
+        ContentValues capCv = new ContentValues();
+        capCv.put(COL_CAP_ID, id);
+        capCv.put(COL_CAP_DOMAIN, domain != null ? domain : "");
+        capCv.put(COL_CAP_PACKAGE, packageId != null ? packageId : "");
+        capCv.put(COL_CAP_TITLE, title != null && !title.isEmpty() ? title : (domain != null && !domain.isEmpty() ? domain : "Captured Login"));
+        capCv.put(COL_CAP_USERNAME, username != null ? username : "");
+        capCv.put(COL_CAP_PASSWORD, password != null ? password : "");
+        capCv.put(COL_CAP_CREATED_AT, now);
+        db.insertWithOnConflict(TABLE_CAPTURED, null, capCv, SQLiteDatabase.CONFLICT_REPLACE);
+
+        // 2. Also insert or update autofill_index so it is immediately autofillable in <5ms
+        ContentValues autoCv = new ContentValues();
+        autoCv.put(COL_AUTO_ID, id);
+        autoCv.put(COL_AUTO_DOMAIN, domain != null ? domain : "");
+        autoCv.put(COL_AUTO_PACKAGE, packageId != null ? packageId : "");
+        autoCv.put(COL_AUTO_TITLE, title != null && !title.isEmpty() ? title : (domain != null && !domain.isEmpty() ? domain : "Captured Login"));
+        autoCv.put(COL_AUTO_USERNAME, username != null ? username : "");
+        autoCv.put(COL_AUTO_ENCRYPTED_SECRET, password != null ? password : "");
+        autoCv.put(COL_AUTO_UPDATED_AT, now);
+        db.insertWithOnConflict(TABLE_AUTOFILL, null, autoCv, SQLiteDatabase.CONFLICT_REPLACE);
+
+        Log.i(TAG, "Saved captured credential for domain: " + domain + ", user: " + username);
+    }
+
+    public Cursor getCapturedCredentials() {
+        SQLiteDatabase db = getReadableDatabase();
+        return db.query(TABLE_CAPTURED, null, null, null, null, null, COL_CAP_CREATED_AT + " DESC");
+    }
+
+    public void deleteCapturedCredential(String id) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete(TABLE_CAPTURED, COL_CAP_ID + " = ?", new String[]{id});
+    }
+
+    public void clearCapturedCredentials() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete(TABLE_CAPTURED, null, null);
     }
 }

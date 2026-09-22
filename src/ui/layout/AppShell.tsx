@@ -16,7 +16,6 @@ import {
   Search,
   Wallet,
   Keyboard,
-  Mail,
 } from 'lucide-react';
 import { Button } from '@/ui/primitives/Button';
 import { ToastContainer } from '@/ui/primitives/Toast';
@@ -26,6 +25,7 @@ import { VaultSwitcher } from '@/ui/navigation/VaultSwitcher';
 import { ThemeSelector } from '@/ui/navigation/ThemeSelector';
 import { ImportExternalModal } from '@/features/migration/ImportExternalModal';
 import { KeyboardShortcutsModal } from '@/features/shortcuts/KeyboardShortcutsModal';
+import { CapturedCredentialsBanner } from '@/features/autofill/CapturedCredentialsBanner';
 import { getShortcuts, matchesShortcut } from '@/domain/shortcuts/shortcutEngine';
 import { useSessionStore } from '@/state/sessionStore';
 import { useUiStore } from '@/state/uiStore';
@@ -102,9 +102,6 @@ export function AppShell({ children }: AppShellProps) {
             case 'nav_wallets':
               navigate('/wallets');
               break;
-            case 'nav_aliases':
-              navigate('/aliases');
-              break;
             case 'nav_settings':
               navigate('/settings');
               break;
@@ -121,7 +118,6 @@ export function AppShell({ children }: AppShellProps) {
   const navItems = [
     { to: '/dashboard', label: 'Vault', icon: <Shield className="h-4 w-4" /> },
     { to: '/passwords', label: 'Passwords', icon: <Key className="h-4 w-4" /> },
-    { to: '/aliases', label: 'Email Aliases', icon: <Mail className="h-4 w-4" /> },
     { to: '/generator', label: 'Generator', icon: <Sparkles className="h-4 w-4" /> },
     { to: '/banking', label: 'Banking', icon: <Building2 className="h-4 w-4" /> },
     { to: '/cards', label: 'Cards', icon: <CreditCard className="h-4 w-4" /> },
@@ -224,6 +220,9 @@ export function AppShell({ children }: AppShellProps) {
           )}
         </div>
       </header>
+
+      {/* Captured Credentials Alert Banner */}
+      <CapturedCredentialsBanner />
 
       {/* Main Body */}
       <div className="flex flex-1 overflow-hidden relative pb-16 lg:pb-0">

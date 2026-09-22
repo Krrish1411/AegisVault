@@ -18,7 +18,7 @@ import type {
 import { createEmergencyGrantPackage } from '@/domain/emergency/emergencyAccessEngine';
 import { DEFAULT_VAULT_SETTINGS } from '@/domain/vault/types';
 import type { VaultRepository, EncryptedAttachmentRecord } from '@/storage/ports/VaultRepository';
-import { sqliteVaultRepository, SqliteVaultRepository } from '@/storage/sqlite/SqliteVaultRepository';
+import { sqliteVaultRepository, SqliteVaultRepository, type CapturedCredentialRecord } from '@/storage/sqlite/SqliteVaultRepository';
 import {
   createEncryptedVault,
   unlockEncryptedVault,
@@ -80,6 +80,19 @@ export class AppVaultService implements VaultService {
   private async syncNativeAutofillIndex(domain: DecryptedVaultDomain): Promise<void> {
     if ('syncAutofillIndex' in this.repository && typeof (this.repository as SqliteVaultRepository).syncAutofillIndex === 'function') {
       await (this.repository as SqliteVaultRepository).syncAutofillIndex(domain);
+    }
+  }
+
+  async getCapturedCredentials(): Promise<CapturedCredentialRecord[]> {
+    if ('getCapturedCredentials' in this.repository && typeof (this.repository as SqliteVaultRepository).getCapturedCredentials === 'function') {
+      return await (this.repository as SqliteVaultRepository).getCapturedCredentials();
+    }
+    return [];
+  }
+
+  async dismissCapturedCredential(id: string): Promise<void> {
+    if ('dismissCapturedCredential' in this.repository && typeof (this.repository as SqliteVaultRepository).dismissCapturedCredential === 'function') {
+      await (this.repository as SqliteVaultRepository).dismissCapturedCredential(id);
     }
   }
 

@@ -112,4 +112,13 @@ describe('SqliteVaultRepository', () => {
     expect(loaded?.cryptoProfile).toBe('aegis-v1');
     expect(loaded?.payload.ciphertext).toBe('ZW5jcnlwdGVkY2lwaGVydGV4dA==');
   });
+
+  it('should gracefully handle getCapturedCredentials and dismissCapturedCredential in web fallback mode', async () => {
+    const captured = await repo.getCapturedCredentials();
+    expect(Array.isArray(captured)).toBe(true);
+    expect(captured.length).toBe(0);
+
+    // Dismiss should be safe no-op
+    await expect(repo.dismissCapturedCredential('cap-test-123')).resolves.not.toThrow();
+  });
 });

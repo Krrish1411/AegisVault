@@ -218,4 +218,62 @@ public class AegisSqlitePlugin extends Plugin {
             call.reject("Failed to sync autofill index: " + e.getMessage(), e);
         }
     }
+
+    @PluginMethod
+    public void getCapturedCredentials(PluginCall call) {
+        try (Cursor cursor = dbHelper.getCapturedCredentials()) {
+            JSArray array = new JSArray();
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    JSObject item = new JSObject();
+                    item.put("id", cursor.getString(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_ID)));
+                    item.put("domain", cursor.getString(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_DOMAIN)));
+                    item.put("packageId", cursor.getString(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_PACKAGE)));
+                    item.put("title", cursor.getString(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_TITLE)));
+                    item.put("username", cursor.getString(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_USERNAME)));
+                    item.put("password", cursor.getString(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_PASSWORD)));
+                    item.put("createdAt", cursor.getLong(cursor.getColumnIndexOrThrow(AegisSqliteHelper.COL_CAP_CREATED_AT)));
+                    array.put(item);
+                } while (cursor.moveToNext());
+            }
+            JSObject ret = new JSObject();
+            ret.put("credentials", array);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to get captured credentials", e);
+            call.reject("Failed to get captured credentials: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void dismissCapturedCredential(PluginCall call) {
+        String id = call.getString("id");
+        if (id == null || id.isEmpty()) {
+            call.reject("id is required");
+            return;
+        }
+
+        try {
+            dbHelper.deleteCapturedCredential(id);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to dismiss captured credential", e);
+            call.reject("Failed to dismiss captured credential: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void clearCapturedCredentials(PluginCall call) {
+        try {
+            dbHelper.clearCapturedCredentials();
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to clear captured credentials", e);
+            call.reject("Failed to clear captured credentials: " + e.getMessage(), e);
+        }
+    }
 }

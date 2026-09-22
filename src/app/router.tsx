@@ -13,7 +13,6 @@ import { NotesScreen } from '@/features/notes/NotesScreen';
 import { WalletsScreen } from '@/features/wallets/WalletsScreen';
 import { SecurityCenterScreen } from '@/features/security-center/SecurityCenterScreen';
 import { SettingsScreen } from '@/features/settings/SettingsScreen';
-import { EmailAliasesScreen } from '@/features/aliases/EmailAliasesScreen';
 import { RouteErrorBoundary } from '@/ui/primitives/RouteErrorBoundary';
 
 export const router = createBrowserRouter([
@@ -76,10 +75,6 @@ export const router = createBrowserRouter([
       {
         path: 'security-center',
         element: <SecurityCenterScreen />,
-      },
-      {
-        path: 'aliases',
-        element: <EmailAliasesScreen />,
       },
       {
         path: 'settings',

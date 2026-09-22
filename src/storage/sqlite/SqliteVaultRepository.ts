@@ -39,6 +39,19 @@ interface AegisSqlitePluginType {
   deleteAttachment(options: { id: string }): Promise<{ success: boolean }>;
   listAttachmentIds(): Promise<{ ids: string[] }>;
   syncAutofillIndex(options: { items: AutofillIndexItem[] }): Promise<{ success: boolean; syncedCount: number }>;
+  getCapturedCredentials(): Promise<{ credentials: CapturedCredentialRecord[] }>;
+  dismissCapturedCredential(options: { id: string }): Promise<{ success: boolean }>;
+  clearCapturedCredentials(): Promise<{ success: boolean }>;
+}
+
+export interface CapturedCredentialRecord {
+  id: string;
+  domain: string;
+  packageId: string;
+  title: string;
+  username: string;
+  password: string;
+  createdAt: number;
 }
 
 const NativeAegisSqlite = registerPlugin<AegisSqlitePluginType>('AegisSqlite');
@@ -328,6 +341,29 @@ export class SqliteVaultRepository implements VaultRepository {
     } catch (e) {
       logger.warn('Failed to sync autofill index to native SQLite', {
         component: 'SqliteVaultRepository',
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  async getCapturedCredentials(): Promise<CapturedCredentialRecord[]> {
+    if (!this.isNativeAvailable) return [];
+    try {
+      const res = await NativeAegisSqlite.getCapturedCredentials();
+      return res.credentials ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  async dismissCapturedCredential(id: string): Promise<void> {
+    if (!this.isNativeAvailable) return;
+    try {
+      await NativeAegisSqlite.dismissCapturedCredential({ id });
+    } catch (e) {
+      logger.warn('Failed to dismiss captured credential', {
+        component: 'SqliteVaultRepository',
+        id,
         error: e instanceof Error ? e.message : String(e),
       });
     }

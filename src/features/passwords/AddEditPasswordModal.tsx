@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Key, Globe, User, FileText, Star, Lock, Sparkles, Layers, Clock, ShieldCheck, Copy, Check, Mail } from 'lucide-react';
+import { Key, Globe, User, FileText, Star, Lock, Sparkles, Layers, Clock, ShieldCheck } from 'lucide-react';
 import { Dialog } from '@/ui/primitives/Dialog';
 import { Button } from '@/ui/primitives/Button';
 import { Input } from '@/ui/primitives/Input';
@@ -7,9 +7,7 @@ import { SecretInput } from '@/ui/primitives/SecretInput';
 import { CustomSelect } from '@/ui/primitives/CustomSelect';
 import { GeneratorModal } from '@/features/generator/GeneratorModal';
 import { generateTotp, parseOtpauthUri } from '@/domain/totp/totpEngine';
-import { generateDuckAlias, isDuckAlias } from '@/domain/generator/emailAliasGenerator';
-import { webClipboard } from '@/platform/web/WebClipboardPort';
-import { useAliasStore } from '@/state/aliasStore';
+import { generatePassword } from '@/domain/generator/secretGenerator';
 import type { VaultItemEnvelope, LoginPayload, PasswordHistoryEntry } from '@/domain/vault/types';
 import { appVaultService } from '@/application/services/AppVaultService';
 import { useUiStore } from '@/state/uiStore';
@@ -18,6 +16,12 @@ export interface AddEditPasswordModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingItem?: VaultItemEnvelope | null;
+  initialValues?: {
+    title?: string;
+    website?: string;
+    username?: string;
+    password?: string;
+  };
   onSaved: () => void;
 }
 
@@ -25,6 +29,7 @@ export function AddEditPasswordModal({
   open,
   onOpenChange,
   editingItem,
+  initialValues,
   onSaved,
 }: AddEditPasswordModalProps) {
   const addToast = useUiStore((state) => state.addToast);
@@ -50,43 +55,6 @@ export function AddEditPasswordModal({
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [showGeneratorModal, setShowGeneratorModal] = React.useState(false);
-  const [aliasCopied, setAliasCopied] = React.useState(false);
-
-  const forwardingEmail = useAliasStore((state) => state.forwardingEmail);
-
-  const handleCopyAlias = async (textToCopy: string) => {
-    try {
-      await webClipboard.writeText(textToCopy);
-      setAliasCopied(true);
-      setTimeout(() => setAliasCopied(false), 2000);
-      addToast({
-        title: 'Alias Copied',
-        description: `${textToCopy} copied to clipboard`,
-        variant: 'success',
-      });
-    } catch {
-      // fallback
-    }
-  };
-
-  const handleGenerateAlias = async () => {
-    const alias = generateDuckAlias({ serviceHint: website || title });
-    setUsername(alias);
-    try {
-      await webClipboard.writeText(alias);
-      setAliasCopied(true);
-      setTimeout(() => setAliasCopied(false), 2000);
-    } catch {
-      // fallback
-    }
-    addToast({
-      title: 'DuckDuckGo Alias Generated & Copied',
-      description: forwardingEmail
-        ? `${alias} (Forwards to ${forwardingEmail})`
-        : `${alias} copied to clipboard!`,
-      variant: 'success',
-    });
-  };
 
   const vaults = appVaultService.getVaultRecords();
   const vaultOptions = vaults.map((v) => ({
@@ -95,7 +63,7 @@ export function AddEditPasswordModal({
     description: v.description || 'Secure encrypted container',
   }));
 
-  // Sync with editing item
+  // Sync with editing item or initialValues
   React.useEffect(() => {
     if (editingItem) {
       const payload = editingItem.payload as Partial<LoginPayload>;
@@ -120,10 +88,10 @@ export function AddEditPasswordModal({
         setCustomExpiryDate('');
       }
     } else {
-      setTitle('');
-      setUsername('');
-      setPassword('');
-      setWebsite('');
+      setTitle(initialValues?.title ?? '');
+      setUsername(initialValues?.username ?? '');
+      setPassword(initialValues?.password ?? '');
+      setWebsite(initialValues?.website ?? '');
       setNotes('');
       setFavorite(false);
       setTargetVaultId(activeVaultId === 'all' ? 'vault-personal' : activeVaultId);
@@ -132,7 +100,7 @@ export function AddEditPasswordModal({
       setTotpSecret('');
     }
     setError(undefined);
-  }, [editingItem, open, activeVaultId]);
+  }, [editingItem, initialValues, open, activeVaultId]);
 
   const handleTotpChange = (val: string) => {
     const trimmed = val.trim();
@@ -335,86 +303,61 @@ export function AddEditPasswordModal({
           </div>
 
           {/* Username / Email */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="item-username" className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                <span>Username or Email</span>
-              </label>
-              <div className="flex items-center gap-2">
-                {isDuckAlias(username) && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopyAlias(username)}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline focus:outline-none cursor-pointer"
-                    title="Copy disguise email"
-                  >
-                    {aliasCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    <span>{aliasCopied ? 'Copied' : 'Copy'}</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleGenerateAlias}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline focus:outline-none cursor-pointer"
-                  title="Generate private @duck.com email disguise and copy to clipboard"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  <span>@duck.com Disguise</span>
-                </button>
-              </div>
-            </div>
-            <div className="relative flex items-center">
-              <Input
-                id="item-username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="user@example.com or private disguise..."
-                disabled={isSaving}
-                className={isDuckAlias(username) ? 'pr-10' : ''}
-              />
-              {isDuckAlias(username) && (
-                <button
-                  type="button"
-                  onClick={() => handleCopyAlias(username)}
-                  className="absolute right-2 p-1.5 rounded-lg text-text-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
-                  title="Copy alias to clipboard"
-                  aria-label="Copy alias to clipboard"
-                >
-                  {aliasCopied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                </button>
-              )}
-            </div>
-            {isDuckAlias(username) && (
-              <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-pine-500/10 border border-pine-500/20 text-xs text-pine-700 dark:text-pine-300">
-                <span className="flex items-center gap-1.5 font-medium truncate">
-                  <Mail className="h-3.5 w-3.5 text-pine-600 shrink-0" />
-                  <span className="truncate">
-                    {forwardingEmail ? `Forwards to ${forwardingEmail}` : 'DuckDuckGo tracker-free disguise'}
-                  </span>
-                </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-pine-600 dark:text-pine-400 shrink-0 ml-2">
-                  Zero Spam
-                </span>
-              </div>
-            )}
+          <div className="space-y-1">
+            <label htmlFor="item-username" className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5" />
+              <span>Username or Email</span>
+            </label>
+            <Input
+              id="item-username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="user@example.com or username..."
+              disabled={isSaving}
+            />
           </div>
 
-          {/* Password + Generate Button */}
+          {/* Password + Generate Buttons */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label htmlFor="item-password" className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
                 <Key className="h-3.5 w-3.5" />
                 <span>Password</span>
               </label>
-              <button
-                type="button"
-                onClick={() => setShowGeneratorModal(true)}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline focus:outline-none cursor-pointer"
-              >
-                <Sparkles className="h-3 w-3" />
-                <span>Open Generator</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pwd = generatePassword({
+                      length: 20,
+                      uppercase: true,
+                      lowercase: true,
+                      numbers: true,
+                      symbols: true,
+                      excludeAmbiguous: false,
+                    });
+                    setPassword(pwd.secret);
+                    addToast({
+                      title: 'Strong Password Generated',
+                      description: '20-character high-entropy password created',
+                      variant: 'success',
+                    });
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline focus:outline-none cursor-pointer"
+                  title="Generate strong 20-character password in 1 click"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  <span>Quick Generate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGeneratorModal(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted hover:text-text-primary hover:underline focus:outline-none cursor-pointer"
+                  title="Customize length, passphrase, or PIN"
+                >
+                  <span>Options…</span>
+                </button>
+              </div>
             </div>
             <SecretInput
               id="item-password"
