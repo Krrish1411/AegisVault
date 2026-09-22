@@ -20,6 +20,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     name: Build Android APK
@@ -184,6 +187,11 @@ jobs:
           name: AegisVault ${{ github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body: |
+            ## AegisVault ${{ github.ref_name }}
+            - Native Android APK (Debug & Release Signed)
+            - System-Wide Autofill Framework with direct SQLite index
+            - Pure Biometrics (Fingerprint & Face ID)
+            - DuckDuckGo Email Protection (@duck.com)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
