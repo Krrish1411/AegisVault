@@ -26,9 +26,9 @@ function randomToken(length = 6): string {
 
 export interface DuckEmailOptions {
   /** Optional service/site name, e.g. "netflix", "github", "amazon" */
-  serviceHint?: string;
+  serviceHint?: string | undefined;
   /** Format style: 'memorable' (e.g. safe-lynx-8f2k@duck.com) or 'compact' (e.g. vlt-7x9q@duck.com) */
-  style?: 'memorable' | 'compact' | 'service';
+  style?: ('memorable' | 'compact' | 'service') | undefined;
 }
 
 /**
@@ -66,4 +66,55 @@ export function generateDuckAlias(options: DuckEmailOptions = {}): string {
  */
 export function isDuckAlias(email: string): boolean {
   return /^[a-z0-9._%+-]+@duck\.com$/i.test(email.trim());
+}
+
+export interface AggregatedAlias {
+  readonly id: string;
+  readonly alias: string;
+  readonly title: string;
+  readonly source: 'vault' | 'standalone';
+  readonly createdAt: string;
+  readonly linkedItemId?: string | undefined;
+  readonly notes?: string | undefined;
+}
+
+/**
+ * Extracts all @duck.com aliases present across decrypted vault item envelopes.
+ */
+export function extractAliasesFromVault(
+  items: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly archived?: boolean;
+    readonly createdAt: string;
+    readonly payload?: Record<string, unknown>;
+  }[]
+): AggregatedAlias[] {
+  const aliases: AggregatedAlias[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (item.archived) continue;
+    const payload = (item.payload || {}) as Record<string, unknown>;
+    const candidates = [payload.username, payload.email].filter(
+      (v): v is string => typeof v === 'string'
+    );
+
+    for (const cand of candidates) {
+      const trimmed = cand.trim();
+      if (isDuckAlias(trimmed) && !seen.has(`${item.id}:${trimmed}`)) {
+        seen.add(`${item.id}:${trimmed}`);
+        aliases.push({
+          id: `vault-${item.id}-${trimmed}`,
+          alias: trimmed,
+          title: item.title,
+          source: 'vault',
+          createdAt: item.createdAt,
+          linkedItemId: item.id,
+        });
+      }
+    }
+  }
+
+  return aliases;
 }

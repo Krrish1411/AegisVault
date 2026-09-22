@@ -120,6 +120,14 @@ export const DEFAULT_SHORTCUTS: readonly ShortcutAction[] = [
     defaultKey: 'alt+9',
     currentKey: 'alt+9',
   },
+  {
+    id: 'nav_aliases',
+    title: 'Go to Email Aliases',
+    description: 'Navigate to DuckDuckGo email disguises and forwarding',
+    category: 'Navigation',
+    defaultKey: 'mod+shift+e',
+    currentKey: 'mod+shift+e',
+  },
 ];
 
 export function getShortcuts(): ShortcutAction[] {

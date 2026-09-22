@@ -54,9 +54,6 @@ public class AegisBiometricPlugin extends Plugin {
                 case BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED:
                     reason = "NOT_ENROLLED";
                     break;
-                case BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED:
-                    reason = "SECURITY_UPDATE_REQUIRED";
-                    break;
                 case BiometricManager.BIOMETRIC_STATUS_UNKNOWN:
                 default:
                     reason = "UNKNOWN";

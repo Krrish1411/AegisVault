@@ -223,7 +223,7 @@ public class AegisAutofillService extends AutofillService {
             int variation = inputType & InputType.TYPE_MASK_VARIATION;
             if (variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
                     || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-                    || variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD) {
+                    || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) {
                 isPassword = true;
             } else if (variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
                     || variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS) {

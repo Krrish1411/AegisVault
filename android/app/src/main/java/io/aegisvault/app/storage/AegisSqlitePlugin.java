@@ -51,7 +51,7 @@ public class AegisSqlitePlugin extends Plugin {
             ret.put("success", true);
             call.resolve(ret);
         } catch (Exception e) {
-            Log.error(TAG, "Failed to save vault container to SQLite", e);
+            Log.e(TAG, "Failed to save vault container to SQLite", e);
             call.reject("Failed to save vault container: " + e.getMessage(), e);
         }
     }
@@ -71,7 +71,7 @@ public class AegisSqlitePlugin extends Plugin {
             }
             call.resolve(ret);
         } catch (Exception e) {
-            Log.error(TAG, "Failed to read vault container from SQLite", e);
+            Log.e(TAG, "Failed to read vault container from SQLite", e);
             call.reject("Failed to read vault container: " + e.getMessage(), e);
         }
     }
