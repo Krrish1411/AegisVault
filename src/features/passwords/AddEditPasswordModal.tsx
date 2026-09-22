@@ -7,6 +7,7 @@ import { SecretInput } from '@/ui/primitives/SecretInput';
 import { CustomSelect } from '@/ui/primitives/CustomSelect';
 import { GeneratorModal } from '@/features/generator/GeneratorModal';
 import { generateTotp, parseOtpauthUri } from '@/domain/totp/totpEngine';
+import { generateDuckAlias } from '@/domain/generator/emailAliasGenerator';
 import type { VaultItemEnvelope, LoginPayload, PasswordHistoryEntry } from '@/domain/vault/types';
 import { appVaultService } from '@/application/services/AppVaultService';
 import { useUiStore } from '@/state/uiStore';
@@ -296,15 +297,34 @@ export function AddEditPasswordModal({
 
           {/* Username / Email */}
           <div className="space-y-1">
-            <label htmlFor="item-username" className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5" />
-              <span>Username or Email</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="item-username" className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" />
+                <span>Username or Email</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const alias = generateDuckAlias({ serviceHint: website || title });
+                  setUsername(alias);
+                  addToast({
+                    title: 'DuckDuckGo Alias Generated',
+                    description: `Generated disguise: ${alias}`,
+                    variant: 'success',
+                  });
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline focus:outline-none cursor-pointer"
+                title="Generate private @duck.com email disguise (100% offline)"
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>@duck.com Disguise</span>
+              </button>
+            </div>
             <Input
               id="item-username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="user@example.com"
+              placeholder="user@example.com or private disguise..."
               disabled={isSaving}
             />
           </div>

@@ -8,7 +8,11 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, error, startIcon, endIcon, disabled, ...props }, ref) => {
+  ({ className, type, error, startIcon, endIcon, disabled, id, ...props }, ref) => {
+    const generatedId = React.useId();
+    const inputId = id ?? generatedId;
+    const errorId = `${inputId}-error`;
+
     return (
       <div className="relative w-full">
         {startIcon && (
@@ -17,7 +21,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           </div>
         )}
         <input
+          id={inputId}
           type={type}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           className={cn(
             'flex h-11 w-full rounded-xl border border-line bg-card px-3.5 py-2 text-base sm:text-sm text-ink placeholder:text-ink/35 transition-all shadow-xs outline-none',
             'focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20',
@@ -36,7 +43,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             {endIcon}
           </div>
         )}
-        {error && <p className="mt-1.5 text-xs text-flare-600 font-medium">{error}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="mt-1.5 text-xs text-flare-600 font-medium">
+            {error}
+          </p>
+        )}
       </div>
     );
   }

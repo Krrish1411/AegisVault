@@ -148,6 +148,19 @@ export class SodiumCryptoProvider implements CryptoProvider {
     }
   }
 
+  memzero(bytes: Uint8Array): void {
+    if (!bytes || bytes.length === 0) return;
+    try {
+      if (this.isReady && typeof sodium.memzero === 'function') {
+        sodium.memzero(toSodiumBytes(bytes));
+      }
+    } catch {
+      // Fallback in case of non-sodium realm
+    } finally {
+      bytes.fill(0);
+    }
+  }
+
   // Encoding helpers
   toBase64(bytes: Uint8Array): string {
     this.ensureReady();

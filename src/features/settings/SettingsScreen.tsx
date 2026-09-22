@@ -36,6 +36,7 @@ import { Badge } from '@/ui/primitives/Badge';
 import { Input } from '@/ui/primitives/Input';
 import { Dialog } from '@/ui/primitives/Dialog';
 import { ChangePasswordModal } from '@/features/recovery/ChangePasswordModal';
+import { QuickPinModal } from '@/features/security/QuickPinModal';
 import { ExportBackupModal } from '@/features/backup/ExportBackupModal';
 import { ImportBackupModal } from '@/features/backup/ImportBackupModal';
 import { ExportShareModal } from '@/features/sharing/ExportShareModal';
@@ -76,6 +77,8 @@ export function SettingsScreen() {
 
   // Modals state
   const [showChangePasswordModal, setShowChangePasswordModal] = React.useState(false);
+  const [showQuickPinModal, setShowQuickPinModal] = React.useState(false);
+  const [hasQuickPin, setHasQuickPin] = React.useState(() => appVaultService.hasQuickPin());
   const [showExportModal, setShowExportModal] = React.useState(false);
   const [showImportModal, setShowImportModal] = React.useState(false);
   const [showExportShareModal, setShowExportShareModal] = React.useState(false);
@@ -192,6 +195,37 @@ export function SettingsScreen() {
                     className="text-xs"
                   >
                     Change Password
+                  </Button>
+                </div>
+              </div>
+
+              {/* Quick Device PIN Unlock (<0.05s) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-border bg-surface-subtle">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-5 w-5 text-accent shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-text-primary">Quick Device PIN Unlock (&lt;0.05s)</p>
+                      <Badge variant={hasQuickPin ? 'success' : 'secondary'} className="text-[10px] px-1.5 py-0.5">
+                        {hasQuickPin ? 'Active' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-text-secondary">
+                      {hasQuickPin
+                        ? 'Hardware-grade PBKDF2 wrapping with instant unlock (<0.05s) and 3-strike lockout'
+                        : 'Unlock vault with short 4-12 digit PIN instead of typing full master password'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowQuickPinModal(true)}
+                    className="text-xs shrink-0"
+                  >
+                    {hasQuickPin ? 'Manage PIN' : 'Enable Quick PIN'}
                   </Button>
                 </div>
               </div>
@@ -1046,6 +1080,13 @@ export function SettingsScreen() {
       <ChangePasswordModal
         open={showChangePasswordModal}
         onOpenChange={setShowChangePasswordModal}
+      />
+
+      {/* Quick Device PIN Dialog */}
+      <QuickPinModal
+        open={showQuickPinModal}
+        onOpenChange={setShowQuickPinModal}
+        onPinChanged={() => setHasQuickPin(appVaultService.hasQuickPin())}
       />
 
       {/* Export Backup Dialog */}

@@ -60,4 +60,9 @@ export interface CryptoProvider {
     readonly length: number;
     readonly subkeyId?: number;
   }): Uint8Array;
+
+  /**
+   * Securely zeroes sensitive byte memory to prevent forensic inspection.
+   */
+  memzero(bytes: Uint8Array): void;
 }

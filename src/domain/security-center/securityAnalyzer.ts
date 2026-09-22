@@ -1,4 +1,4 @@
-import type { DecryptedVaultDomain, VaultItemEnvelope, LoginPayload } from '@/domain/vault/types';
+import type { DecryptedVaultDomain, VaultItemEnvelope } from '@/domain/vault/types';
 import { calculatePasswordEntropy } from '@/domain/generator/secretGenerator';
 import { isCommonPassword } from './commonPasswords';
 
@@ -66,8 +66,118 @@ function isPredictablePattern(password: string): boolean {
   return PREDICTABLE_PATTERNS.some((pattern) => pattern.test(password));
 }
 
+interface ExtractedSecret {
+  readonly itemId: string;
+  readonly itemTitle: string;
+  readonly itemType: string;
+  readonly label: string;
+  readonly secret: string;
+  readonly username?: string | undefined;
+  readonly updatedAt: string;
+  readonly expiresAt?: string | undefined;
+  readonly isTotpConfigured?: boolean | undefined;
+  readonly minSafeLength: number;
+  readonly minSafeEntropy: number;
+}
+
 /**
- * Evaluates the security posture and password health of all vault items locally.
+ * Extracts all passwords, PINs, and credentials across all vault item types:
+ * logins, banking portals, bank accounts, UPI PINs, ATM PINs, cards, applications, and email.
+ */
+function extractSecretsFromItem(item: VaultItemEnvelope): ExtractedSecret[] {
+  const p = (item.payload ?? {}) as Record<string, unknown>;
+  const results: ExtractedSecret[] = [];
+
+  const add = (
+    label: string,
+    secretVal: unknown,
+    opts: {
+      username?: string | undefined;
+      expiresAt?: string | undefined;
+      isTotpConfigured?: boolean | undefined;
+      minSafeLength?: number | undefined;
+      minSafeEntropy?: number | undefined;
+    } = {}
+  ) => {
+    if (typeof secretVal === 'string' && secretVal.trim().length > 0) {
+      results.push({
+        itemId: item.id,
+        itemTitle: item.title,
+        itemType: item.type,
+        label,
+        secret: secretVal,
+        username: opts.username,
+        updatedAt: item.updatedAt,
+        expiresAt: opts.expiresAt ?? (p.expiresAt as string | undefined),
+        isTotpConfigured: opts.isTotpConfigured,
+        minSafeLength: opts.minSafeLength ?? 12,
+        minSafeEntropy: opts.minSafeEntropy ?? 60,
+      });
+    }
+  };
+
+  switch (item.type) {
+    case 'login':
+      add('Password', p.password, {
+        username: p.username as string | undefined,
+        isTotpConfigured: Boolean(p.totpSecret || p.totp),
+      });
+      break;
+
+    case 'bank_login':
+      add('Login Password', p.password, { username: p.username as string | undefined });
+      add('Transaction Password', p.transactionPassword);
+      break;
+
+    case 'bank_account':
+      add('Net Banking Password', p.netBankingPassword ?? p.loginPassword);
+      add('Transaction Password', p.transactionPassword);
+      add('Profile Password', p.profilePassword);
+      add('MPIN', p.mpin, { minSafeLength: 6, minSafeEntropy: 19 });
+      break;
+
+    case 'bank_profile':
+      add('Profile Password', p.profilePassword);
+      add('Transaction PIN', p.transactionPin, { minSafeLength: 6, minSafeEntropy: 19 });
+      break;
+
+    case 'upi':
+      add('UPI PIN', p.upiPin, { minSafeLength: 4, minSafeEntropy: 13 });
+      break;
+
+    case 'upi_pin':
+      add('UPI PIN', p.pin, { minSafeLength: 4, minSafeEntropy: 13 });
+      break;
+
+    case 'atm_pin':
+      add('ATM PIN', p.pin, { minSafeLength: 4, minSafeEntropy: 13 });
+      break;
+
+    case 'debit_card':
+    case 'credit_card':
+      add('Card PIN', p.pin, { minSafeLength: 4, minSafeEntropy: 13 });
+      break;
+
+    case 'application':
+      add('Application Password', p.password, { username: p.username as string | undefined });
+      break;
+
+    case 'email':
+      add('Email Password', p.password, { username: p.email as string | undefined });
+      break;
+
+    default:
+      if (typeof p.password === 'string' && p.password.length > 0) {
+        add('Password', p.password);
+      }
+      break;
+  }
+
+  return results;
+}
+
+/**
+ * Evaluates the security posture and credential health of all vault items locally.
  * Invariant: 100% offline, zero network requests, zero telemetry.
  */
 export function analyzeVaultHealth(
@@ -79,22 +189,29 @@ export function analyzeVaultHealth(
   const oneDayMs = 24 * 60 * 60 * 1000;
   const maxAgeDays = 180;
 
-  const loginItems = domain.items.filter((item) => item.type === 'login');
   const findings: SecurityFinding[] = [];
+  const vulnerableItemIds = new Set<string>();
 
-  // 1. Password Frequency Map for Duplicate / Reused Detection
-  const passwordMap = new Map<string, VaultItemEnvelope[]>();
-  for (const item of loginItems) {
-    const payload = item.payload as Partial<LoginPayload>;
-    if (payload.password) {
-      const list = passwordMap.get(payload.password) ?? [];
-      list.push(item);
-      passwordMap.set(payload.password, list);
+  // Extract all credentials across all items
+  const allExtracted: ExtractedSecret[] = [];
+  const scannedItemIds = new Set<string>();
+
+  for (const item of domain.items) {
+    if (item.archived) continue;
+    const secrets = extractSecretsFromItem(item);
+    if (secrets.length > 0) {
+      scannedItemIds.add(item.id);
+      allExtracted.push(...secrets);
     }
   }
 
-  // Track items that have at least one vulnerability
-  const vulnerableItemIds = new Set<string>();
+  // 1. Password Frequency Map for Cross-Account Duplicate / Reused Detection
+  const passwordMap = new Map<string, ExtractedSecret[]>();
+  for (const entry of allExtracted) {
+    const list = passwordMap.get(entry.secret) ?? [];
+    list.push(entry);
+    passwordMap.set(entry.secret, list);
+  }
 
   let weakCount = 0;
   let reusedCount = 0;
@@ -104,158 +221,153 @@ export function analyzeVaultHealth(
   let expiredCount = 0;
   let expiringSoonCount = 0;
 
-  for (const item of loginItems) {
-    const payload = item.payload as Partial<LoginPayload>;
-    const password = payload.password ?? '';
-    const username = payload.username;
+  for (const entry of allExtracted) {
+    const { secret, itemId, itemTitle, itemType, label, username, minSafeLength, minSafeEntropy } = entry;
 
     // Check Common Leaked Passwords
-    if (password && isCommonPassword(password)) {
+    if (isCommonPassword(secret)) {
       commonCount++;
-      vulnerableItemIds.add(item.id);
+      vulnerableItemIds.add(itemId);
       findings.push({
-        id: `finding-common-${item.id}`,
-        itemId: item.id,
-        itemTitle: item.title,
-        itemType: item.type,
+        id: `finding-common-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+        itemId,
+        itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+        itemType,
         ...(username ? { username } : {}),
         vulnerability: 'common',
         severity: 'critical',
-        title: 'Common / Compromised Password',
-        description: `The password for "${item.title}" appears in known breach lists and is easily guessable by attackers.`,
-        remediationAction: 'Generate a unique, high-entropy password immediately.',
+        title: `Common / Compromised ${label}`,
+        description: `The ${label.toLowerCase()} for "${itemTitle}" appears in known breach lists and is easily guessable.`,
+        remediationAction: 'Generate a unique, high-entropy secret immediately.',
       });
     }
 
     // Check Weak / Low Entropy
-    if (password) {
-      const entropy = calculatePasswordEntropy(password);
-      if (password.length < 12 || entropy.entropyBits < 60) {
-        weakCount++;
-        vulnerableItemIds.add(item.id);
-        findings.push({
-          id: `finding-weak-${item.id}`,
-          itemId: item.id,
-          itemTitle: item.title,
-          itemType: item.type,
-          ...(username ? { username } : {}),
-          vulnerability: 'weak',
-          severity: 'high',
-          title: 'Weak Password',
-          description: `Password has low entropy (${entropy.entropyBits} bits) or length under 12 characters.`,
-          remediationAction: 'Upgrade password length to at least 20 characters.',
-        });
-      } else if (isPredictablePattern(password)) {
-        vulnerableItemIds.add(item.id);
-        findings.push({
-          id: `finding-predictable-${item.id}`,
-          itemId: item.id,
-          itemTitle: item.title,
-          itemType: item.type,
-          ...(username ? { username } : {}),
-          vulnerability: 'predictable',
-          severity: 'medium',
-          title: 'Predictable Structure',
-          description: 'Contains predictable sequences, repeating characters, or common year suffixes.',
-          remediationAction: 'Use CSPRNG random generation instead of human-patterned passwords.',
-        });
-      }
+    const entropy = calculatePasswordEntropy(secret);
+    if (secret.length < minSafeLength || entropy.entropyBits < minSafeEntropy) {
+      weakCount++;
+      vulnerableItemIds.add(itemId);
+      findings.push({
+        id: `finding-weak-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+        itemId,
+        itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+        itemType,
+        ...(username ? { username } : {}),
+        vulnerability: 'weak',
+        severity: 'high',
+        title: `Weak ${label}`,
+        description: `${label} has low entropy (${entropy.entropyBits} bits) or length under ${minSafeLength} characters.`,
+        remediationAction: `Upgrade ${label.toLowerCase()} length to at least ${minSafeLength} characters.`,
+      });
+    } else if (isPredictablePattern(secret)) {
+      vulnerableItemIds.add(itemId);
+      findings.push({
+        id: `finding-predictable-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+        itemId,
+        itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+        itemType,
+        ...(username ? { username } : {}),
+        vulnerability: 'predictable',
+        severity: 'medium',
+        title: `Predictable ${label}`,
+        description: 'Contains repeating sequences, common year numbers, or basic patterns.',
+        remediationAction: 'Use random CSPRNG generation instead of human-patterned secrets.',
+      });
     }
 
-    // Check Reused / Duplicate Passwords
-    if (password) {
-      const sharedItems = passwordMap.get(password) ?? [];
-      if (sharedItems.length > 1) {
+    // Check Reused / Duplicate Credentials across items
+    const shared = passwordMap.get(secret) ?? [];
+    if (shared.length > 1) {
+      const otherItems = shared.filter((s) => s.itemId !== itemId);
+      if (otherItems.length > 0) {
         reusedCount++;
-        vulnerableItemIds.add(item.id);
-        const otherTitles = sharedItems
-          .filter((i) => i.id !== item.id)
-          .map((i) => i.title)
+        vulnerableItemIds.add(itemId);
+        const otherNames = otherItems
+          .map((s) => (s.label === 'Password' ? s.itemTitle : `${s.itemTitle} (${s.label})`))
           .join(', ');
 
         findings.push({
-          id: `finding-reused-${item.id}`,
-          itemId: item.id,
-          itemTitle: item.title,
-          itemType: item.type,
+          id: `finding-reused-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+          itemId,
+          itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+          itemType,
           ...(username ? { username } : {}),
           vulnerability: 'reused',
           severity: 'critical',
-          title: 'Reused Password',
-          description: `This password is shared with other accounts (${otherTitles}). A single breach compromises all of them.`,
-          remediationAction: 'Assign an independent, distinct password to this service.',
-          relatedItemIds: sharedItems.map((i) => i.id),
+          title: `Reused ${label}`,
+          description: `This ${label.toLowerCase()} is shared with other accounts (${otherNames}). A breach of one compromises all.`,
+          remediationAction: 'Assign an independent, unique secret to this service.',
+          relatedItemIds: shared.map((s) => s.itemId),
         });
       }
     }
 
     // Check Age (>180 days)
-    const updatedTime = new Date(item.updatedAt).getTime();
+    const updatedTime = new Date(entry.updatedAt).getTime();
     const ageDays = Math.floor((now - updatedTime) / oneDayMs);
     if (ageDays > maxAgeDays) {
       oldCount++;
       findings.push({
-        id: `finding-old-${item.id}`,
-        itemId: item.id,
-        itemTitle: item.title,
-        itemType: item.type,
+        id: `finding-old-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+        itemId,
+        itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+        itemType,
         ...(username ? { username } : {}),
         vulnerability: 'old',
         severity: 'low',
-        title: 'Old / Stale Password',
-        description: `This password was last changed ${ageDays} days ago.`,
+        title: `Stale ${label}`,
+        description: `This ${label.toLowerCase()} was last rotated ${ageDays} days ago.`,
         remediationAction: 'Review and rotate credential if the service is sensitive.',
       });
     }
 
-    // Check Password Expiration Policy
-    const expiresAt = payload.expiresAt ?? (item as unknown as { expiresAt?: string }).expiresAt;
-    if (expiresAt) {
-      const expiryTime = new Date(expiresAt).getTime();
+    // Check Expiration Policy
+    if (entry.expiresAt) {
+      const expiryTime = new Date(entry.expiresAt).getTime();
       if (!isNaN(expiryTime)) {
         if (expiryTime <= now) {
           expiredCount++;
-          vulnerableItemIds.add(item.id);
+          vulnerableItemIds.add(itemId);
           const daysAgo = Math.max(0, Math.floor((now - expiryTime) / oneDayMs));
           findings.push({
-            id: `finding-expired-${item.id}`,
-            itemId: item.id,
-            itemTitle: item.title,
-            itemType: item.type,
+            id: `finding-expired-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+            itemId,
+            itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+            itemType,
             ...(username ? { username } : {}),
             vulnerability: 'expired',
             severity: 'critical',
-            title: 'Password Expired',
-            description: `This password expired ${daysAgo === 0 ? 'today' : `${daysAgo} days ago`} according to its expiration policy.`,
-            remediationAction: 'Rotate this password immediately and reset the expiration policy.',
+            title: `${label} Expired`,
+            description: `This ${label.toLowerCase()} expired ${daysAgo === 0 ? 'today' : `${daysAgo} days ago`}.`,
+            remediationAction: 'Rotate this secret immediately.',
           });
         } else if (expiryTime <= now + 14 * oneDayMs) {
           expiringSoonCount++;
           const daysLeft = Math.max(1, Math.ceil((expiryTime - now) / oneDayMs));
           findings.push({
-            id: `finding-expiring-${item.id}`,
-            itemId: item.id,
-            itemTitle: item.title,
-            itemType: item.type,
+            id: `finding-expiring-${itemId}-${label.toLowerCase().replace(/\s+/g, '-')}`,
+            itemId,
+            itemTitle: label === 'Password' ? itemTitle : `${itemTitle} (${label})`,
+            itemType,
             ...(username ? { username } : {}),
             vulnerability: 'expiring_soon',
             severity: 'medium',
-            title: 'Password Expiring Soon',
-            description: `This password will expire in ${daysLeft} days.`,
-            remediationAction: 'Plan to rotate this credential before it expires.',
+            title: `${label} Expiring Soon`,
+            description: `This ${label.toLowerCase()} will expire in ${daysLeft} days.`,
+            remediationAction: 'Prepare to rotate this credential before expiration.',
           });
         }
       }
     }
 
-    // Check Missing 2FA / TOTP
-    if (!payload.totpSecret) {
+    // Check Missing 2FA for logins
+    if (itemType === 'login' && !entry.isTotpConfigured) {
       missing2faCount++;
       findings.push({
-        id: `finding-2fa-${item.id}`,
-        itemId: item.id,
-        itemTitle: item.title,
-        itemType: item.type,
+        id: `finding-2fa-${itemId}`,
+        itemId,
+        itemTitle,
+        itemType,
         ...(username ? { username } : {}),
         vulnerability: 'missing_2fa',
         severity: 'low',
@@ -263,51 +375,6 @@ export function analyzeVaultHealth(
         description: 'No TOTP authenticator key is attached to this login credential.',
         remediationAction: 'Enable two-factor authentication on the service and store the TOTP secret here.',
       });
-    }
-  }
-
-  // Check Banking Credentials (Net Banking, Profile & Transaction Passwords)
-  const bankItems = domain.items.filter((item) => item.type === 'bank_account');
-  for (const item of bankItems) {
-    const payload = item.payload as Record<string, unknown>;
-    const passwordsToCheck = [
-      { key: 'loginPassword', label: 'Net Banking Login Password', val: payload.loginPassword as string | undefined },
-      { key: 'profilePassword', label: 'Profile Password', val: payload.profilePassword as string | undefined },
-      { key: 'transactionPassword', label: 'Transaction Password', val: payload.transactionPassword as string | undefined },
-    ];
-
-    for (const { key, label, val } of passwordsToCheck) {
-      if (!val) continue;
-      if (isCommonPassword(val)) {
-        commonCount++;
-        findings.push({
-          id: `finding-common-${item.id}-${key}`,
-          itemId: item.id,
-          itemTitle: `${item.title} (${label})`,
-          itemType: item.type,
-          vulnerability: 'common',
-          severity: 'critical',
-          title: `Common / Compromised ${label}`,
-          description: `The ${label.toLowerCase()} for "${item.title}" appears in known breach lists and is easily guessable.`,
-          remediationAction: 'Change this banking password immediately to a strong, generated secret.',
-        });
-      } else {
-        const entropy = calculatePasswordEntropy(val);
-        if (val.length < 10 || entropy.entropyBits < 50) {
-          weakCount++;
-          findings.push({
-            id: `finding-weak-${item.id}-${key}`,
-            itemId: item.id,
-            itemTitle: `${item.title} (${label})`,
-            itemType: item.type,
-            vulnerability: 'weak',
-            severity: 'high',
-            title: `Weak ${label}`,
-            description: `${label} has low entropy (${entropy.entropyBits} bits) or length under 10 characters.`,
-            remediationAction: 'Strengthen this banking credential.',
-          });
-        }
-      }
     }
   }
 
@@ -325,8 +392,9 @@ export function analyzeVaultHealth(
 
   // Calculate Overall Score (0-100)
   let score = 100;
+  const totalScanned = scannedItemIds.size;
 
-  if (loginItems.length > 0) {
+  if (totalScanned > 0) {
     const commonDeduction = Math.min(30, commonCount * 15);
     const weakDeduction = Math.min(25, weakCount * 10);
     const reusedDeduction = Math.min(30, reusedCount * 10);
@@ -348,14 +416,14 @@ export function analyzeVaultHealth(
   else if (score >= 50) securityRating = 'needs_attention';
   else securityRating = 'critical';
 
-  const healthyLogins = loginItems.length - vulnerableItemIds.size;
+  const healthyLogins = Math.max(0, totalScanned - vulnerableItemIds.size);
 
   return {
     overallScore: score,
     securityRating,
     scannedAt,
-    totalLogins: loginItems.length,
-    healthyLogins: Math.max(0, healthyLogins),
+    totalLogins: totalScanned,
+    healthyLogins,
     weakCount,
     reusedCount,
     oldCount,

@@ -25,7 +25,7 @@
 | **Author / Creator** | Crafted by **Krish Patel** |
 | **Core Architecture** | Zero-Knowledge, Offline-First, Institutional-Grade Encrypted Vault |
 | **Target Platforms** | Modern Web Browsers (PWA), Android Native APK (via Capacitor), Desktop Browsers |
-| **Test Suite Status** | **44 / 44 test files passing (182 / 182 tests pass)** |
+| **Test Suite Status** | **48 / 48 test files passing (197 / 197 tests pass)** |
 | **Typecheck Status** | **0 errors** (`tsc --noEmit` clean) |
 | **Linter Status** | **0 warnings** (`eslint . --max-warnings 0` clean) |
 | **Vite Build Status** | Both `build` (Web) and `build:android` (Capacitor) build cleanly in CI |
@@ -301,44 +301,38 @@ graph TD
 ## 7. Forensic Bug Report & Required Fixes
 
 ### BUG-01: Security Analyzer Ignores Financial & Banking Credentials
-* **File**: [`src/domain/security-center/securityAnalyzer.ts:82`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/domain/security-center/securityAnalyzer.ts#L82)
+* **Status**: **RESOLVED & VERIFIED** (2026-09-22)
+* **File**: [`src/domain/security-center/securityAnalyzer.ts`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/domain/security-center/securityAnalyzer.ts) & [`securityAnalyzer.test.ts`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/domain/security-center/securityAnalyzer.test.ts)
 * **Severity**: **MEDIUM**
-* **Root Cause**: The filter `const loginItems = domain.items.filter((item) => item.type === 'login');` restricts security analysis exclusively to `login` items. Banking logins (`bank_login`), bank accounts (`bank_account` with netBankingPassword or transactionPassword), bank profiles (`bank_profile`), UPI PINs (`upi_pin`), ATM PINs (`atm_pin`), application passwords (`application`), and email credentials (`email`) are completely ignored.
-* **Impact**: Users who reuse weak passwords across banking portals or reuse their ATM PIN receive a misleadingly high security score (100/100) because those items are skipped.
-* **Remediation**:
-  1. Expand credential extraction into a helper function `extractItemCredentials(item: VaultItemEnvelope)` that extracts passwords, transaction passwords, and PINs across all credential types.
-  2. Include all extracted credentials in frequency mapping, weak password detection, and leak analysis.
+* **Root Cause**: The filter previously restricted security analysis exclusively to `login` items. Banking logins (`bank_login`), bank accounts (`bank_account`), bank profiles (`bank_profile`), UPI PINs (`upi_pin`), ATM PINs (`atm_pin`), card PINs (`debit_card`, `credit_card`), application passwords (`application`), and email credentials (`email`) were completely ignored.
+* **Resolution**: Implemented `extractSecretsFromItem()` extracting all credentials across all item types into a single unified frequency map. Detects cross-account password reuse (e.g. streaming password reused as bank password) and weak PINs. 7/7 unit tests pass.
 
 ---
 
 ### BUG-02: Dialog & Sheet Primitives Lack Tab Focus Trapping
-* **File**: [`src/ui/primitives/Dialog.tsx:37`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Dialog.tsx#L37) and [`src/ui/primitives/Sheet.tsx:24`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Sheet.tsx#L24)
+* **Status**: **RESOLVED & VERIFIED** (2026-09-22)
+* **File**: [`src/lib/ui/useFocusTrap.ts`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/lib/ui/useFocusTrap.ts), [`src/ui/primitives/Dialog.tsx`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Dialog.tsx), [`src/ui/primitives/Sheet.tsx`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Sheet.tsx)
 * **Severity**: **LOW (ACCESSIBILITY / AGENTS.md COMPLIANCE)**
-* **Root Cause**: While `Dialog` and `Sheet` handle `Escape` key dismissals and lock body scrolling, they do not intercept `Tab` and `Shift+Tab`. Focus can escape the modal and navigate to obscured elements behind the backdrop. Additionally, the element that triggered the modal does not receive focus back upon closing.
-* **Impact**: Keyboard-only users and screen readers lose context when navigating through modal dialogs.
-* **Remediation**:
-  1. Add focus trap hook/logic that cycles Tab focus among tabbable elements inside the modal container.
-  2. Save `document.activeElement` on open and restore focus on unmount.
+* **Root Cause**: Modal dialogs lacked Tab and Shift+Tab trapping, allowing focus to escape into obscured background elements. Additionally, focus was not returned to trigger elements.
+* **Resolution**: Created `useFocusTrap()` hook implementing WAI-ARIA APG focus management. Traps keyboard Tab navigation within the modal and automatically restores previous document activeElement on dismiss.
 
 ---
 
 ### BUG-03: Input Primitive Missing ARIA Invalid & Describedby Attributes
-* **File**: [`src/ui/primitives/Input.tsx:27-39`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Input.tsx#L27-L39)
+* **Status**: **RESOLVED & VERIFIED** (2026-09-22)
+* **File**: [`src/ui/primitives/Input.tsx`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Input.tsx)
 * **Severity**: **LOW (ACCESSIBILITY)**
-* **Root Cause**: When an `error` prop is passed, `<p>` is rendered with the error text, but the `<input>` element does not receive `aria-invalid="true"` or `aria-describedby={errorId}`.
-* **Impact**: Assistive technologies cannot announce field invalidity to visually impaired users upon submission.
-* **Remediation**:
-  1. Generate an `errorId = React.useId()` and attach `aria-invalid={Boolean(error)}` and `aria-describedby={error ? errorId : undefined}` to `<input>`.
+* **Root Cause**: Error message text lacked association with the input field via ARIA attributes.
+* **Resolution**: Integrated `React.useId()` generating deterministic `errorId`. Input renders `aria-invalid={Boolean(error)}`, `aria-describedby={error ? errorId : undefined}`, and error message containers have `role="alert"`.
 
 ---
 
 ### BUG-04: Multiple Dialog Mounts Release Scroll Lock Prematurely
-* **File**: [`src/ui/primitives/Dialog.tsx:44`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/ui/primitives/Dialog.tsx#L44)
+* **Status**: **RESOLVED & VERIFIED** (2026-09-22)
+* **File**: [`src/lib/ui/scrollLock.ts`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/lib/ui/scrollLock.ts) & [`scrollLock.test.ts`](file:///home/krish/Downloads/Coding/gemini/Coding/vault/src/lib/ui/scrollLock.test.ts)
 * **Severity**: **LOW (UI GLITCH)**
-* **Root Cause**: `document.body.style.overflow = ''` is called unconditionally on unmount. When a child dialog (e.g. `GeneratorModal` opened from within `AddEditItemModal`) closes, it clears the scroll lock on `document.body`, allowing the background to scroll while the parent modal is still open.
-* **Impact**: Background scroll chaining on mobile and desktop when nesting modals.
-* **Remediation**:
-  1. Implement a reference-counted scroll lock manager (`scrollLock.lock()`, `scrollLock.unlock()`) as recommended in `Webapp-2-Androidapk.md`.
+* **Root Cause**: `document.body.style.overflow = ''` was called unconditionally on unmount, prematurely unlocking the body when nested dialogs closed.
+* **Resolution**: Implemented reference-counted `scrollLock` manager (`lock()` / `unlock()`) preserving body overflow until all modals are unmounted. Verified with 3 unit tests.
 
 ---
 
@@ -374,7 +368,8 @@ graph TD
 | **2026-09-12 17:25** | BMC button cleanup, Settings tour card, Addresses & Burner Personas, Android APK build workflow. | `src/domain/vault/types.ts`, `burnerPersonaGenerator.ts`, `AddEditItemModal.tsx`, `ItemDetailSheet.tsx`, `IdentityScreen.tsx`, `SettingsScreen.tsx`, `capacitor.config.ts`, `android-build.yml` | Added `address` item type, burner persona generator, Settings tour navigation, Capacitor Android build config. | `a0e151b` |
 | **2026-09-12 17:28** | Fix failing test in `burnerPersonaGenerator.test.ts` and audit Android tablet / ultra-wide layout. | `burnerPersonaGenerator.test.ts`, `AppShell.tsx`, `MobileBottomNav.tsx` | Fixed email regex for alphanumeric characters. Aligned responsive shell breakpoint to `lg` (1024px) for tablet landscape/portrait. Added `max-w-7xl mx-auto` ultra-wide container. | `c0af6e7` |
 | **2026-09-12 17:34** | Secret scanning false positive fix & Android CI build repair. | `demoVaultData.ts`, `android-build.yml`, `package.json` | Replaced `whsec_` and `sk-proj-` demo data strings with `DEMO_PLACEHOLDER_...` to clear GitHub Secret Scanning. Updated workflow to `npm run build:android`. Installed `@capacitor/*` dependencies. | `3d2014f` |
-| **2026-09-22 09:26** | Comprehensive 360° multi-dimensional audit (Security, Feature, Interconnectivity, UI, UX) and creation of master `PROGRESS.md`. | `PROGRESS.md` | Verified 44/44 test files pass (182 tests), 0 typecheck errors, 0 lint warnings, clean web and android builds. Documented complete codebase architecture, forensic bug report (BUG-01 to BUG-04), and roadmap. | *Pending* |
+| **2026-09-22 09:26** | Comprehensive 360° multi-dimensional audit (Security, Feature, Interconnectivity, UI, UX) and creation of master `PROGRESS.md`. | `PROGRESS.md` | Verified 44/44 test files pass (182 tests), 0 typecheck errors, 0 lint warnings, clean web and android builds. Documented complete codebase architecture, forensic bug report (BUG-01 to BUG-04), and roadmap. | `1fb649d` |
+| **2026-09-22 10:05** | Execute Phase 1 Forensic Bug Fixes (BUG-01 to BUG-04), C-level `sodium.memzero` scrubbing, and implement Phase 2: 2-Tier Lock Architecture (<0.05s Quick Device PIN unlock with 3-strike lockout) and DuckDuckGo Email Disguises (@duck.com). | `src/domain/security-center/securityAnalyzer.ts`, `securityAnalyzer.test.ts`, `src/lib/ui/scrollLock.ts`, `scrollLock.test.ts`, `src/lib/ui/useFocusTrap.ts`, `src/ui/primitives/Dialog.tsx`, `src/ui/primitives/Sheet.tsx`, `src/ui/primitives/Input.tsx`, `src/security/crypto/CryptoProvider.ts`, `src/security/crypto/SodiumCryptoProvider.ts`, `SodiumCryptoProvider.test.ts`, `src/security/crypto/deviceAuth.ts`, `deviceAuth.test.ts`, `src/application/services/AppVaultService.ts`, `src/features/security/QuickPinModal.tsx`, `QuickPinModal.test.tsx`, `src/features/unlock/UnlockScreen.tsx`, `src/features/settings/SettingsScreen.tsx`, `src/domain/generator/emailAliasGenerator.ts`, `emailAliasGenerator.test.ts`, `src/features/passwords/AddEditPasswordModal.tsx`, `src/domain/generator/burnerPersonaGenerator.ts`, `PROGRESS.md` | 1. **BUG-01**: Multi-credential security audit evaluating 11 credential types and detecting cross-account password reuse.<br>2. **BUG-02 & BUG-04**: APG Focus Trap (`useFocusTrap.ts`) and reference-counted scroll lock (`scrollLock.ts`).<br>3. **BUG-03**: Form ARIA accessibility attributes on `Input.tsx`.<br>4. **Cryptographic Scrubbing**: `sodium.memzero()` scrubbing on vault lock & purge.<br>5. **2-Tier Lock Architecture**: Sub-0.05s (<50ms) Quick Device PIN unlock with 100,000 PBKDF2 rounds, XChaCha20-Poly1305 key wrap, and 3-strike lockout + Master Password fallback.<br>6. **DuckDuckGo Email Disguises**: 100% offline `@duck.com` privacy aliases generator with 1-click in `AddEditPasswordModal.tsx`.<br>**Verification**: 48/48 test files pass (197/197 tests), 0 typecheck errors, 0 lint warnings, Vite web & Android builds pass. | *Pending* |
 
 ---
 

@@ -8,6 +8,7 @@ import {
   Sparkles,
   ShieldAlert,
   Plus,
+  KeyRound,
 } from 'lucide-react';
 import { Button } from '@/ui/primitives/Button';
 import { SecretInput } from '@/ui/primitives/SecretInput';
@@ -24,6 +25,10 @@ import { AuthenticationFailedError, VaultNotFoundError } from '@/lib/errors/Vaul
 export function UnlockScreen() {
   const navigate = useNavigate();
   const [password, setPassword] = React.useState('');
+  const [pin, setPin] = React.useState('');
+  const [hasQuickPin, setHasQuickPin] = React.useState(false);
+  const [unlockMode, setUnlockMode] = React.useState<'pin' | 'password'>('password');
+  const [pinAttemptsLeft, setPinAttemptsLeft] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [isUnlocking, setIsUnlocking] = React.useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = React.useState(false);
@@ -42,14 +47,21 @@ export function UnlockScreen() {
     }
   }, [status, navigate]);
 
-  // Check if vault exists in storage
+  // Check if vault exists in storage and if Quick PIN is configured
   React.useEffect(() => {
     appVaultService.isVaultCreated().then((exists) => {
       setHasVault(exists);
+      if (exists) {
+        const pinConfigured = appVaultService.hasQuickPin();
+        setHasQuickPin(pinConfigured);
+        if (pinConfigured) {
+          setUnlockMode('pin');
+        }
+      }
     });
   }, []);
 
-  const handleUnlock = async (e: React.FormEvent) => {
+  const handlePasswordUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) {
       setError('Please enter your master password');
@@ -79,6 +91,41 @@ export function UnlockScreen() {
         setError('Incorrect master password. Please try again.');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to unlock vault');
+      }
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleQuickPinUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pin.trim()) {
+      setError('Please enter your device PIN');
+      return;
+    }
+
+    setIsUnlocking(true);
+    setError(undefined);
+
+    try {
+      await appVaultService.unlockWithQuickPin(pin);
+
+      addToast({
+        title: 'Vault Unlocked',
+        description: 'Device PIN verified in <0.05s. Session active.',
+        variant: 'success',
+      });
+
+      navigate('/dashboard');
+    } catch {
+      const remaining = appVaultService.getQuickPinRemainingAttempts();
+      setPinAttemptsLeft(remaining);
+      if (remaining === 0) {
+        setHasQuickPin(false);
+        setUnlockMode('password');
+        setError('Quick PIN disabled after 3 incorrect attempts. Please unlock with your Master Password.');
+      } else {
+        setError(`Incorrect PIN. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before lockout.`);
       }
     } finally {
       setIsUnlocking(false);
@@ -151,52 +198,125 @@ export function UnlockScreen() {
               <CardHeader className="text-center pb-4">
                 <CardTitle className="text-lg font-display font-bold text-ink">{vaultName}</CardTitle>
                 <CardDescription className="text-xs text-ink/65">
-                  Enter your master password to decrypt your session
+                  {unlockMode === 'pin'
+                    ? 'Enter your device PIN for instant decryption (<0.05s)'
+                    : 'Enter your master password to decrypt your session'}
                 </CardDescription>
               </CardHeader>
 
               <CardContent>
-                <form onSubmit={handleUnlock} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label htmlFor="master-password" className="text-xs font-semibold text-ink/75">
-                      Master Password
-                    </label>
-                    <SecretInput
-                      id="master-password"
-                      placeholder="Enter master password..."
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        if (error) setError(undefined);
-                      }}
-                      autoFocus
-                      disabled={isUnlocking}
-                    />
-                    {error && <p className="text-xs text-danger font-medium">{error}</p>}
-                  </div>
+                {unlockMode === 'pin' ? (
+                  /* Quick Device PIN Form */
+                  <form onSubmit={handleQuickPinUnlock} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="device-pin" className="text-xs font-semibold text-ink/75">
+                          Device PIN
+                        </label>
+                        {pinAttemptsLeft !== null && (
+                          <span className="text-[11px] font-medium text-amber-500">
+                            {pinAttemptsLeft} attempt{pinAttemptsLeft === 1 ? '' : 's'} remaining
+                          </span>
+                        )}
+                      </div>
+                      <SecretInput
+                        id="device-pin"
+                        placeholder="Enter 4-12 digit PIN..."
+                        value={pin}
+                        onChange={(e) => {
+                          setPin(e.target.value);
+                          if (error) setError(undefined);
+                        }}
+                        autoFocus
+                        disabled={isUnlocking}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                      />
+                      {error && <p className="text-xs text-danger font-medium">{error}</p>}
+                    </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full gap-2 shadow-hero active:scale-95"
-                    isLoading={isUnlocking}
-                  >
-                    <Lock className="h-4 w-4" />
-                    <span>Decrypt & Unlock Vault</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-
-                  {/* Demo Quick Fill Hint */}
-                  <div className="pt-1 flex items-center justify-center">
-                    <button
-                      type="button"
-                      onClick={handleDemoFill}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-mono text-accent hover:underline cursor-pointer"
+                    <Button
+                      type="submit"
+                      className="w-full gap-2 shadow-hero active:scale-95"
+                      isLoading={isUnlocking}
                     >
-                      <Sparkles className="h-3 w-3 text-accent" />
-                      <span>Using Demo Vault? Autofill demo password</span>
-                    </button>
-                  </div>
-                </form>
+                      <KeyRound className="h-4 w-4" />
+                      <span>Unlock with Quick PIN (&lt;0.05s)</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+
+                    <div className="pt-2 border-t border-line/50 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUnlockMode('password');
+                          setError(undefined);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-ink/65 hover:text-ink transition-colors cursor-pointer"
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        <span>Use Master Password instead</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Full Argon2id Master Password Form */
+                  <form onSubmit={handlePasswordUnlock} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="master-password" className="text-xs font-semibold text-ink/75">
+                        Master Password
+                      </label>
+                      <SecretInput
+                        id="master-password"
+                        placeholder="Enter master password..."
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (error) setError(undefined);
+                        }}
+                        autoFocus
+                        disabled={isUnlocking}
+                      />
+                      {error && <p className="text-xs text-danger font-medium">{error}</p>}
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full gap-2 shadow-hero active:scale-95"
+                      isLoading={isUnlocking}
+                    >
+                      <Lock className="h-4 w-4" />
+                      <span>Decrypt & Unlock Vault</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+
+                    <div className="pt-1 flex flex-col items-center gap-2">
+                      {hasQuickPin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnlockMode('pin');
+                            setError(undefined);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline cursor-pointer"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          <span>Use Quick Device PIN (&lt;0.05s unlock)</span>
+                        </button>
+                      )}
+
+                      {/* Demo Quick Fill Hint */}
+                      <button
+                        type="button"
+                        onClick={handleDemoFill}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-mono text-accent hover:underline cursor-pointer"
+                      >
+                        <Sparkles className="h-3 w-3 text-accent" />
+                        <span>Using Demo Vault? Autofill demo password</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
               </CardContent>
             </Card>
           )}

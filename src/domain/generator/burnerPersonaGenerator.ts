@@ -134,9 +134,8 @@ const LOCATIONS = [
 
 const EMAIL_PROVIDERS = [
   'duck.com',
+  'duck.com',
   'relay.firefox.com',
-  'simplelogin.com',
-  'anonaddy.me',
   'proton.me',
 ];
 

@@ -28,6 +28,13 @@ import {
 } from '@/security/crypto/vaultCrypto';
 import { SodiumCryptoProvider } from '@/security/crypto/SodiumCryptoProvider';
 import { generateRecoveryPhrase } from '@/security/crypto/bip39';
+import {
+  setupQuickPin,
+  hasQuickPin,
+  unwrapWithQuickPin,
+  clearQuickPin,
+  getQuickPinRemainingAttempts,
+} from '@/security/crypto/deviceAuth';
 import { exportEncryptedVault, importEncryptedVault } from '@/security/export/vaultExport';
 import { FORMAT_VERSION, CRYPTO_PROFILE } from '@/security/serialization/vaultSerializer';
 import { inMemorySearchIndex } from '@/domain/organization/searchIndex';
@@ -183,10 +190,69 @@ export class AppVaultService implements VaultService {
     logger.info('Vault unlocked successfully', { component: 'AppVaultService', vaultId: domain.metadata.id });
   }
 
+  async unlockWithQuickPin(pin: string): Promise<void> {
+    const container = await this.repository.read();
+    if (!container) {
+      throw new VaultNotFoundError('No vault found on this device');
+    }
+
+    const vaultKey = await unwrapWithQuickPin(pin);
+
+    // Decrypt domain payload using unwrapped vaultKey in < 20ms
+    await this.cryptoProvider.init();
+    const nonce = this.cryptoProvider.fromBase64(container.payload.nonce);
+    const ciphertext = this.cryptoProvider.fromBase64(container.payload.ciphertext);
+
+    let decryptedBytes: Uint8Array;
+    try {
+      decryptedBytes = this.cryptoProvider.aeadDecrypt({
+        ciphertext,
+        nonce,
+        key: vaultKey,
+      });
+    } catch (err) {
+      this.cryptoProvider.memzero(vaultKey);
+      throw new VaultCorruptedError('Failed to decrypt vault payload with quick PIN key', err);
+    }
+
+    const domainJson = this.cryptoProvider.toString(decryptedBytes);
+    this.cryptoProvider.memzero(decryptedBytes);
+
+    const { validateDecryptedVault } = await import('@/security/serialization/vaultSerializer');
+    const domain = validateDecryptedVault(domainJson);
+
+    this.inMemoryDomain = domain;
+    this.inMemoryVaultKey = vaultKey;
+    inMemorySearchIndex.buildIndex(domain);
+
+    useSessionStore.getState().unlock(domain.metadata.name);
+    this.notify();
+    logger.info('Vault unlocked via Quick PIN in &lt; 20ms', { component: 'AppVaultService', vaultId: domain.metadata.id });
+  }
+
+  async setupQuickPin(pin: string): Promise<void> {
+    const { vaultKey } = this.ensureUnlocked();
+    await setupQuickPin(pin, vaultKey);
+    logger.info('Quick PIN configured for instant device unlock', { component: 'AppVaultService' });
+  }
+
+  hasQuickPin(): boolean {
+    return hasQuickPin();
+  }
+
+  clearQuickPin(): void {
+    clearQuickPin();
+    logger.info('Quick PIN cleared from device', { component: 'AppVaultService' });
+  }
+
+  getQuickPinRemainingAttempts(): number {
+    return getQuickPinRemainingAttempts();
+  }
+
   async lockVault(): Promise<void> {
     // Purge key material and decrypted domain from memory
     if (this.inMemoryVaultKey) {
-      this.inMemoryVaultKey.fill(0);
+      this.cryptoProvider.memzero(this.inMemoryVaultKey);
       this.inMemoryVaultKey = null;
     }
     this.inMemoryDomain = null;
@@ -1264,7 +1330,7 @@ export class AppVaultService implements VaultService {
 
   async purgeEntireVault(): Promise<void> {
     if (this.inMemoryVaultKey) {
-      this.inMemoryVaultKey.fill(0);
+      this.cryptoProvider.memzero(this.inMemoryVaultKey);
       this.inMemoryVaultKey = null;
     }
     this.inMemoryDomain = null;

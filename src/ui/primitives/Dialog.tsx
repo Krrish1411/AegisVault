@@ -2,6 +2,8 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
+import { acquireScrollLock } from '@/lib/ui/scrollLock';
+import { useFocusTrap } from '@/lib/ui/useFocusTrap';
 
 export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
 
@@ -34,18 +36,26 @@ export function Dialog({
   className,
   size = 'xl',
 }: DialogProps) {
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+
+  // Accessible focus trap
+  useFocusTrap(dialogRef, open);
+
+  // Reference-counted scroll lock & Escape key
   React.useEffect(() => {
+    if (!open) return;
+
+    const releaseScrollLock = acquireScrollLock();
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
+      if (e.key === 'Escape') {
         onOpenChange(false);
       }
     };
-    if (open) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = '';
+      releaseScrollLock();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [open, onOpenChange]);
@@ -64,12 +74,14 @@ export function Dialog({
 
       {/* Dialog content with Desktop Widening, perfectly centered on viewport */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? 'dialog-title' : undefined}
         aria-describedby={description ? 'dialog-description' : undefined}
+        tabIndex={-1}
         className={cn(
-          'relative z-50 w-full rounded-2xl border border-line bg-card p-6 shadow-modal text-ink transition-all anim-pop max-h-[90vh] flex flex-col',
+          'relative z-50 w-full rounded-2xl border border-line bg-card p-6 shadow-modal text-ink transition-all anim-pop max-h-[90vh] flex flex-col focus:outline-none',
           maxWidthClasses[size],
           className
         )}

@@ -225,4 +225,70 @@ describe('securityAnalyzer Local Password Health Engine', () => {
     expect(expiringFinding).toBeDefined();
     expect(expiringFinding?.severity).toBe('medium');
   });
+
+  it('should detect weak banking credentials and cross-item password reuse', () => {
+    const sharedPassword = 'SharedPassword123!@#';
+    const domain = createMockDomain([
+      {
+        id: 'login-shared',
+        type: 'login',
+        title: 'Streaming Service',
+        favorite: false,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        payload: {
+          username: 'streamer',
+          password: sharedPassword,
+          totpSecret: 'JBSWY3DPEHPK3PXP',
+        },
+      },
+      {
+        id: 'bank-1',
+        type: 'bank_account',
+        title: 'HDFC Savings Account',
+        favorite: false,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        payload: {
+          accountNumber: '1234567890',
+          netBankingPassword: sharedPassword, // REUSED from streaming service!
+          mpin: '1234', // WEAK 4-digit MPIN!
+        },
+      },
+      {
+        id: 'upi-1',
+        type: 'upi_pin',
+        title: 'Google Pay UPI',
+        favorite: false,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        payload: {
+          pin: '0000', // WEAK and PREDICTABLE!
+        },
+      },
+    ]);
+
+    const report = analyzeVaultHealth(domain);
+    expect(report.totalLogins).toBe(3);
+    expect(report.reusedCount).toBeGreaterThanOrEqual(1);
+    expect(report.weakCount).toBeGreaterThanOrEqual(1);
+
+    // Finding for cross-account reuse between bank and login
+    const reuseFinding = report.findings.find(
+      (f) => f.vulnerability === 'reused' && f.itemId === 'bank-1'
+    );
+    expect(reuseFinding).toBeDefined();
+    expect(reuseFinding?.description).toContain('Streaming Service');
+
+    // Finding for weak MPIN
+    const mpinFinding = report.findings.find(
+      (f) => f.vulnerability === 'weak' && f.itemId === 'bank-1'
+    );
+    expect(mpinFinding).toBeDefined();
+    expect(mpinFinding?.title).toContain('MPIN');
+  });
 });
+
